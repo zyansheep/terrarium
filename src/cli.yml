@@ -1,0 +1,12 @@
+name: terrarium
+version: "0.1.0"
+author: cphos, Zyansheep
+about: A Terraria server written in Rust
+args:
+    - world:
+        short: w
+        long: world
+        value_name: FILE
+        help: The world to host
+        takes_value: true
+        required: true
