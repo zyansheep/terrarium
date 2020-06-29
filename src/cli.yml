@@ -6,7 +6,12 @@ args:
     - world:
         short: w
         long: world
-        value_name: FILE
+        value_name: WORLD FILE or DIRECTORY
         help: The world to host
         takes_value: true
-        required: true
+    - port:
+        short: p
+        long: port
+        value_name: <PORT>
+        help: Port to open to host server
+        takes_value: true
