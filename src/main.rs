@@ -11,7 +11,7 @@ mod config;
 use config::Config;
 
 fn main() {
-    let yaml_args = load_yaml!("cli.yml");
+    let yaml_args = load_yaml!("app.yml");
     let matches = App::from_yaml(yaml_args).get_matches();
 
     use std::path::Path;
