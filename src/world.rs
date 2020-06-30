@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 extern crate byteorder;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
