@@ -51,8 +51,8 @@ impl World {
 
     fn write_file_format_header(&self, wtr: &mut impl io::Write) -> Result<(), io::Error> {
         wtr.write_i32::<LittleEndian>(self.version)?;
-        wtr.write(b"relogic")?;
-        wtr.write_u8(2)?;
+        wtr.write(b"relogic")?; // Magic.
+        wtr.write_u8(2)?; // Filetype.
         wtr.write_u32::<LittleEndian>(self.revision)?;
         wtr.write_u64::<LittleEndian>(self.is_favorite as u64)?;
 
