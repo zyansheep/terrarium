@@ -1,9 +1,8 @@
 extern crate byteorder;
 
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::fs::File;
 use std::io;
-
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 #[derive(Default)]
 pub struct World {
