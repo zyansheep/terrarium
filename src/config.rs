@@ -1,16 +1,10 @@
 
 #![allow(dead_code)]
-use std::path::Path;
 
 extern crate serde;
 use serde::{Serialize, Deserialize};
 extern crate serde_yaml;
 
-
-/*pub struct Config {
-	pub x: i32,
-	pub y: i32,
-}*/
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
 	pub port: u16,
@@ -21,6 +15,7 @@ pub struct Config {
 
 use std::fs::File;
 use std::error::Error;
+use std::path::Path;
 impl Config {
 	pub fn new(port: u16, world: &str) -> Self {
 		Config {
