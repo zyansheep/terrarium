@@ -7,8 +7,14 @@ args:
         short: w
         long: world
         value_name: WORLD FILE or DIRECTORY
-        help: The world to host
         takes_value: true
+        help: The world to host
+    - config:
+        short: c
+        long: config
+        value_name: CONFIG FILE
+        takes_value: true
+        help: Run server with config.yml file that configures the server
     - port:
         short: p
         long: port

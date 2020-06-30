@@ -2,26 +2,49 @@
 extern crate clap;
 use clap::App;
 
-use std::path::Path;
+// World module
+mod world;
+use world::World;
+
+// Config loading & saving
+mod config;
+use config::Config;
+
 
 fn main() {
-	let yaml = load_yaml!("cli.yml");
-	let matches = App::from_yaml(yaml).get_matches();
-		
-	// Figure out where world file and config files are
-	let mut world_path = Path::new("world.wld");
-	if let Some(world) = matches.value_of("world") {
-		world_path = Path::new(world);
-	} else if !world_path.is_file() {
-		panic!("World file is not file: {}", world_path.display());
-	}
-	//let world = World::new();
-	//world.load(world_path).unwrap(); //This should call path.exists() and return error accordingly
+	let yaml_args = load_yaml!("cli.yml");
+	let matches = App::from_yaml(yaml_args).get_matches();
 
-	let mut port: u16 = 7777;
-	if let Some(port_str) = matches.value_of("port") {
-		port = port_str.parse().expect("Error, port value not correct");
+	use std::path::Path;
+
+	let mut config = Config::new(7777, "world.wld"); // Default port 7777, default world file name "world.wld" (in CWD)
+
+	// if config file path passed, use that
+	let mut config_path = Path::new("config.yml"); // Otherwise, use config.yml in current directory if exists
+	if let Some(config_arg) = matches.value_of("config") {
+		config_path = Path::new(config_arg);
+		config = Config::from_file(config_path).expect("Could not parse yml file passed");
+	}else{
+		if config_path.exists() {
+			config = Config::from_file(config_path).expect("Could not parse config.yml file in current directory?");
+		}
 	}
+	
+	// Override config if different world file provided
+	if let Some(world) = matches.value_of("world") {
+		config.world = world.to_owned();
+	}
+	if let Some(port_str) = matches.value_of("port") {
+		config.port = port_str.parse().expect("Error, port value not correct");
+	}
+
+	println!("{:#?}", config);
+
+	// Read world file
+	let world = World::read_from_file(&config.world).expect("Could not parse world");
+
+	// Write world file
+	world.write_to_file(&config.world).unwrap();
 
 	//let server = Server::new();
 	//server.start(port, world, etc...)
