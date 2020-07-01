@@ -9,12 +9,18 @@ pub struct World {
     revision: u32,
     is_favorite: bool,
     tile_frame_important: Vec<bool>,
+    name: String,
 }
+
+
+mod utils;
+use utils::WorldReader;
 
 impl World {
     pub fn read_from_file(path: &str) -> Result<World, io::Error> {
-        let mut file = File::open(path)?;
-        let wld = World::read(&mut file)?;
+        let file = File::open(path)?;
+        let mut reader = io::BufReader::new(file);
+        let wld = World::read(&mut reader)?;
 
         Ok(wld)
     }
@@ -26,15 +32,16 @@ impl World {
         Ok(())
     }
 
-    pub fn read(rdr: &mut impl io::Read) -> Result<World, io::Error> {
+    pub fn read(rdr: &mut impl io::BufRead) -> Result<World, io::Error> {
         let mut wld = World::default();
 
         wld.read_file_format_header(rdr)?;
+        wld.read_main_header(rdr)?;
 
         Ok(wld)
     }
 
-    fn read_file_format_header(&mut self, rdr: &mut impl io::Read) -> Result<(), io::Error> {
+    fn read_file_format_header(&mut self, rdr: &mut impl io::BufRead) -> Result<(), io::Error> {
         rdr.read_i32::<LittleEndian>()?; // Version (we are assuming that it is 230.)
 
         // File metadata.
@@ -48,6 +55,7 @@ impl World {
         for i in 0..chunk_count {
             chunk_offsets[i as usize] = rdr.read_i32::<LittleEndian>()?;
         }
+        println!("{:#?}", chunk_offsets);
 
         // Tile frame important.
         let tile_count = rdr.read_i16::<LittleEndian>()?;
@@ -68,6 +76,14 @@ impl World {
 
         Ok(())
     }
+    
+    fn read_main_header(&mut self, reader: &mut impl io::BufRead) -> Result<(), io::Error> {
+        self.name = reader.read_varint_string()?;
+        println!("{:?}", self.name);
+
+        Ok(())
+    }
+    
 
     pub fn write(&self, wtr: &mut (impl io::Write + io::Seek)) -> Result<(), io::Error> {
         self.write_file_format_header(wtr)?;

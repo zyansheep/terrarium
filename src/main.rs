@@ -41,9 +41,8 @@ fn main() {
 
     // Read world file
     let world = World::read_from_file(&config.world).expect("Could not parse world");
-
     // Write world file
-    world.write_to_file(&config.world).unwrap();
+    world.write_to_file("write_test.wld").unwrap();
 
     //let server = Server::new();
     //server.start(port, world, etc...)
