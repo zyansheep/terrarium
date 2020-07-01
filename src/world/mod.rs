@@ -6,12 +6,36 @@ use std::fs::File;
 use std::io;
 use utils::{WorldReader, WorldWriter};
 
-#[derive(Default)]
+static VERSION: i32 = 230; //1.4 version
+
+#[derive(Default, Debug)]
+
+struct WorldState {
+    downed_bosses: [bool; 9], //downedBoss 1, 2, 3, queenBee, mechboss 1, 2, 3, mechbossany, plantboss, golemboss, fishron, cultist, moonlord, halloween king, halloween tree, christmas queen, christmas santank, christmas tree
+    downed_events: [bool; 8], //array of bools corresponding to various downed bosses
+    saved_npcs: [bool; 8],
+    world_events: [bool; 8],
+    player_cooldowns: [bool; 8],
+    invasion_data: [bool; 8],
+}
+
 pub struct World {
     revision: u32,
     is_favorite: bool,
     tile_frame_important: Vec<bool>,
     name: String,
+    seed: String,
+
+    id: i32,
+    unique_id: u128,
+    world_gen_version: u64,
+    left_world: i32,
+    right_world: i32,
+    top_world: i32,
+    bottom_world: i32,
+    max_tiles_y: i32,
+    max_tiles_x: i32,
+    world_state: WorldState,
 }
 
 impl World {
@@ -31,36 +55,36 @@ impl World {
         Ok(())
     }
 
-    pub fn read(rdr: &mut impl io::BufRead) -> Result<World, io::Error> {
+    pub fn read(reader: &mut impl io::BufRead) -> Result<World, io::Error> {
         let mut wld = World::default();
 
-        wld.read_file_format_header(rdr)?;
-        wld.read_world_header(rdr)?;
+        wld.read_file_format_header(reader)?;
+        wld.read_world_header(reader)?;
 
         Ok(wld)
     }
 
-    fn read_file_format_header(&mut self, rdr: &mut impl io::BufRead) -> Result<(), io::Error> {
-        rdr.read_i32::<LittleEndian>()?; // Version (we are assuming that it is 230.)
+    fn read_file_format_header(&mut self, reader: &mut impl io::BufRead) -> Result<(), io::Error> {
+        let file_version = reader.read_i32::<LittleEndian>()?; // Version (we are assuming that it is 230.)
+        if file_version != VERSION { panic!("Wrong World File Version!, this server only supports 1.4"); }
 
         // File metadata.
-        rdr.read_u64::<LittleEndian>()?; // Magic + filetype (we are assuming that it is a world file.)
-        self.revision = rdr.read_u32::<LittleEndian>()?;
-        self.is_favorite = rdr.read_u64::<LittleEndian>()? != 0;
+        reader.read_u64::<LittleEndian>()?; // Magic + filetype (we are assuming that it is a world file.)
+        self.revision = reader.read_u32::<LittleEndian>()?;
+        self.is_favorite = reader.read_u64::<LittleEndian>()? != 0;
 
         // Chunk offsets.
-        let chunk_count = rdr.read_i16::<LittleEndian>()?;
+        let chunk_count = reader.read_i16::<LittleEndian>()?;
         let mut chunk_offsets = vec![0; chunk_count as usize];
         for i in 0..chunk_count {
-            chunk_offsets[i as usize] = rdr.read_i32::<LittleEndian>()?;
+            chunk_offsets[i as usize] = reader.read_i32::<LittleEndian>()?;
         }
-        println!("{:#?}", chunk_offsets);
 
         // Tile frame important.
-        let tile_count = rdr.read_i16::<LittleEndian>()?;
+        let tile_count = reader.read_i16::<LittleEndian>()?;
         self.tile_frame_important = vec!(false; tile_count as usize);
 
-        let mut byte = rdr.read_u8()?;
+        let mut byte = reader.read_u8()?;
         let mut bit = 0;
         for i in 0..tile_count {
             if byte & (1 << bit) != 0 {
@@ -68,7 +92,7 @@ impl World {
             }
             bit += 1;
             if bit == 8 {
-                byte = rdr.read_u8()?;
+                byte = reader.read_u8()?;
                 bit = 0;
             }
         }
@@ -78,7 +102,17 @@ impl World {
 
     fn read_world_header(&mut self, reader: &mut impl io::BufRead) -> Result<(), io::Error> {
         self.name = reader.read_varint_string()?;
-        println!("{:?}", self.name);
+        self.seed = reader.read_varint_string()?; // if VERSION >= 179
+        self.unique_id = reader.read_u128::<LittleEndian>()?;
+        self.world_gen_version = reader.read_u64::<LittleEndian>()?;
+
+        self.id = reader.read_i32::<LittleEndian>()?;
+        self.left_world = reader.read_i32::<LittleEndian>()?;
+        self.right_world = reader.read_i32::<LittleEndian>()?;
+        self.top_world = reader.read_i32::<LittleEndian>()?;
+        self.bottom_world = reader.read_i32::<LittleEndian>()?;
+        self.max_tiles_y = reader.read_i32::<LittleEndian>()?;
+        self.max_tiles_x = reader.read_i32::<LittleEndian>()?;
 
         Ok(())
     }
