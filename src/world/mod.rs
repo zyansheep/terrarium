@@ -1,8 +1,10 @@
 extern crate byteorder;
+mod utils;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::fs::File;
 use std::io;
+use utils::WorldReader;
 
 #[derive(Default)]
 pub struct World {
@@ -11,10 +13,6 @@ pub struct World {
     tile_frame_important: Vec<bool>,
     name: String,
 }
-
-
-mod utils;
-use utils::WorldReader;
 
 impl World {
     pub fn read_from_file(path: &str) -> Result<World, io::Error> {
@@ -36,7 +34,7 @@ impl World {
         let mut wld = World::default();
 
         wld.read_file_format_header(rdr)?;
-        wld.read_main_header(rdr)?;
+        wld.read_world_header(rdr)?;
 
         Ok(wld)
     }
@@ -76,14 +74,14 @@ impl World {
 
         Ok(())
     }
-    
-    fn read_main_header(&mut self, reader: &mut impl io::BufRead) -> Result<(), io::Error> {
+
+    fn read_world_header(&mut self, reader: &mut impl io::BufRead) -> Result<(), io::Error> {
         self.name = reader.read_varint_string()?;
         println!("{:?}", self.name);
 
         Ok(())
     }
-    
+
 
     pub fn write(&self, wtr: &mut (impl io::Write + io::Seek)) -> Result<(), io::Error> {
         self.write_file_format_header(wtr)?;
