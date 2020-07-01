@@ -9,7 +9,6 @@ use utils::{WorldReader, WorldWriter};
 static VERSION: i32 = 230; //1.4 version
 
 #[derive(Default, Debug)]
-
 struct WorldState {
     downed_bosses: [bool; 9], //downedBoss 1, 2, 3, queenBee, mechboss 1, 2, 3, mechbossany, plantboss, golemboss, fishron, cultist, moonlord, halloween king, halloween tree, christmas queen, christmas santank, christmas tree
     downed_events: [bool; 8], //array of bools corresponding to various downed bosses
@@ -19,6 +18,7 @@ struct WorldState {
     invasion_data: [bool; 8],
 }
 
+#[derive(Default, Debug)]
 pub struct World {
     revision: u32,
     is_favorite: bool,
