@@ -3,7 +3,7 @@
 // Load tile attributes
 static TILE: &Yaml = load_yaml!("data/tile.yml");
 
-// TOOD: NPC data
+// TODO: NPC data
 
 // TODO: Wall data
 

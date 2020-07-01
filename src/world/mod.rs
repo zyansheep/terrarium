@@ -1,24 +1,24 @@
 extern crate byteorder;
 mod utils;
 
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt};
 use std::fs::File;
 use std::io;
-use utils::{WorldReader, WorldWriter};
+use utils::WorldReader;
 
-static VERSION: i32 = 230; //1.4 version
+static VERSION: i32 = 230; // 1.4.0.5 version.
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 struct WorldState {
-    downed_bosses: [bool; 9], //downedBoss 1, 2, 3, queenBee, mechboss 1, 2, 3, mechbossany, plantboss, golemboss, fishron, cultist, moonlord, halloween king, halloween tree, christmas queen, christmas santank, christmas tree
-    downed_events: [bool; 8], //array of bools corresponding to various downed bosses
+    downed_bosses: [bool; 9], // downedBoss 1, 2, 3, queenBee, mechboss 1, 2, 3, mechbossany, plantboss, golemboss, fishron, cultist, moonlord, halloween king, halloween tree, christmas queen, christmas santank, christmas tree.
+    downed_events: [bool; 8], // Array of bools corresponding to various downed bosses.
     saved_npcs: [bool; 8],
     world_events: [bool; 8],
     player_cooldowns: [bool; 8],
     invasion_data: [bool; 8],
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct World {
     revision: u32,
     is_favorite: bool,
@@ -47,13 +47,13 @@ impl World {
         Ok(wld)
     }
 
-    pub fn write_to_file(&self, path: &str) -> Result<(), io::Error> {
+    /*pub fn write_to_file(&self, path: &str) -> Result<(), io::Error> {
         let file = File::create(path)?;
         let mut writer = io::BufWriter::new(file);
         self.write(&mut writer)?;
 
         Ok(())
-    }
+    }*/
 
     pub fn read(reader: &mut impl io::BufRead) -> Result<World, io::Error> {
         let mut wld = World::default();
@@ -66,7 +66,7 @@ impl World {
 
     fn read_file_format_header(&mut self, reader: &mut impl io::BufRead) -> Result<(), io::Error> {
         let file_version = reader.read_i32::<LittleEndian>()?; // Version (we are assuming that it is 230.)
-        if file_version != VERSION { panic!("Wrong World File Version!, this server only supports 1.4"); }
+        assert_eq!(file_version, VERSION, "Outdated world file");
 
         // File metadata.
         reader.read_u64::<LittleEndian>()?; // Magic + filetype (we are assuming that it is a world file.)
@@ -117,8 +117,7 @@ impl World {
         Ok(())
     }
 
-
-    pub fn write(&self, wtr: &mut (impl io::Write + io::Seek)) -> Result<(), io::Error> {
+    /*pub fn write(&self, wtr: &mut (impl io::Write + io::Seek)) -> Result<(), io::Error> {
         self.write_file_format_header(wtr)?;
         self.write_world_header(wtr)?;
 
@@ -162,9 +161,10 @@ impl World {
 
         Ok(())
     }
+
     fn write_world_header(&self, writer: &mut (impl io::Write + io::Seek)) -> io::Result<()> {
         writer.write_varint_string(&self.name)?;
 
         Ok(())
-    }
+    }*/
 }

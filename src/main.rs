@@ -43,7 +43,7 @@ fn main() {
     let world = World::read_from_file(&config.world).expect("Could not parse world");
     println!("{:?}", world);
     // Write world file
-    world.write_to_file("write_test.wld").unwrap();
+    //world.write_to_file("write_test.wld").unwrap();
 
     //let server = Server::new();
     //server.start(port, world, etc...)
