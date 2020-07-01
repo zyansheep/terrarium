@@ -4,7 +4,7 @@ mod utils;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::fs::File;
 use std::io;
-use utils::WorldReader;
+use utils::{WorldReader, WorldWriter};
 
 #[derive(Default)]
 pub struct World {
@@ -24,8 +24,9 @@ impl World {
     }
 
     pub fn write_to_file(&self, path: &str) -> Result<(), io::Error> {
-        let mut file = File::create(path)?;
-        self.write(&mut file)?;
+        let file = File::create(path)?;
+        let mut writer = io::BufWriter::new(file);
+        self.write(&mut writer)?;
 
         Ok(())
     }
@@ -85,26 +86,27 @@ impl World {
 
     pub fn write(&self, wtr: &mut (impl io::Write + io::Seek)) -> Result<(), io::Error> {
         self.write_file_format_header(wtr)?;
+        self.write_world_header(wtr)?;
 
         Ok(())
     }
 
     fn write_file_format_header(&self, wtr: &mut (impl io::Write + io::Seek)) -> Result<(), io::Error> {
-        wtr.write_i32::<LittleEndian>(230)?; // Version.
+        wtr.write_i32::<LittleEndian>(230)?; // World File Version
 
-        // File metadata.
-        wtr.write(b"relogic")?; // Magic.
-        wtr.write_u8(2)?; // Filetype.
+        // File metadata
+        wtr.write(b"relogic")?; // Magic letters
+        wtr.write_u8(2)?; // Filetype
         wtr.write_u32::<LittleEndian>(self.revision)?;
         wtr.write_u64::<LittleEndian>(self.is_favorite as u64)?;
 
-        // Chunk offsets.
-        wtr.write_i16::<LittleEndian>(11)?; // Chunk count.
+        // Chunk offsets
+        wtr.write_i16::<LittleEndian>(11)?; // Chunk count
         for _ in 0..11 {
-            wtr.write_i32::<LittleEndian>(0)?; // Placeholders for after writing all chunks.
+            wtr.write_i32::<LittleEndian>(0)?; // Placeholders for after writing all chunks
         }
 
-        // Tile frame important.
+        // Tile frame important
         wtr.write_i16::<LittleEndian>(self.tile_frame_important.len() as i16)?;
 
         let mut byte = 0;
@@ -123,6 +125,11 @@ impl World {
         if bit != 0 {
             wtr.write_u8(byte)?;
         }
+
+        Ok(())
+    }
+    fn write_world_header(&self, writer: &mut (impl io::Write + io::Seek)) -> io::Result<()> {
+        writer.write_varint_string(&self.name)?;
 
         Ok(())
     }
