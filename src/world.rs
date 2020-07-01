@@ -8,6 +8,7 @@ use std::io;
 pub struct World {
     revision: u32,
     is_favorite: bool,
+    tile_frame_important: Vec<bool>,
 }
 
 impl World {
@@ -48,6 +49,23 @@ impl World {
             chunk_offsets[i as usize] = rdr.read_i32::<LittleEndian>()?;
         }
 
+        // Tile frame important.
+        let tile_count = rdr.read_i16::<LittleEndian>()?;
+        self.tile_frame_important = vec!(false; tile_count as usize);
+
+        let mut byte = rdr.read_u8()?;
+        let mut bit = 0;
+        for i in 0..tile_count {
+            if byte & (1 << bit) != 0 {
+                self.tile_frame_important[i as usize] = true;
+            }
+            bit += 1;
+            if bit == 8 {
+                byte = rdr.read_u8()?;
+                bit = 0;
+            }
+        }
+
         Ok(())
     }
 
@@ -70,6 +88,26 @@ impl World {
         wtr.write_i16::<LittleEndian>(11)?; // Chunk count.
         for _ in 0..11 {
             wtr.write_i32::<LittleEndian>(0)?; // Placeholders for after writing all chunks.
+        }
+
+        // Tile frame important.
+        wtr.write_i16::<LittleEndian>(self.tile_frame_important.len() as i16)?;
+
+        let mut byte = 0;
+        let mut bit = 0;
+        for i in 0..self.tile_frame_important.len() {
+            if self.tile_frame_important[i] {
+                byte |= 1 << bit;
+            }
+            bit += 1;
+            if bit == 8 {
+                wtr.write_u8(byte)?;
+                byte = 0;
+                bit = 0;
+            }
+        }
+        if bit != 0 {
+            wtr.write_u8(byte)?;
         }
 
         Ok(())
