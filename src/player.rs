@@ -1,27 +1,32 @@
 #![allow(dead_code)]
-extern crate bitflags;
+#![warn(unused_must_use)]
 
 bitflags! {
+	#[derive(Default)]
 	struct Difficulty: u8 {
-		const Softcore 		= 0b00000000 // 0
-		const Mediumcore 	= 0b00000001 // 1
-		const Harcore 		= 0b00000010 // 2
-		const ExtraAccessory= 0b00000100 // 4
-		const Creative 		= 0b00001000 // 8
+		const Softcore 		= 0b00000000; // 0
+		const Mediumcore 	= 0b00000001; // 1
+		const Harcore 		= 0b00000010; // 2
+		const ExtraAccessory= 0b00000100; // 4
+		const Creative 		= 0b00001000; // 8
 	}
 }
 bitflags! {
+	#[derive(Default)]
 	struct TorchState: u8 {
-		UsingBiomeTorches = 0b00000001; // 1
-		HappyFunTorchTime = 0b00000010; // 2
+		const UsingBiomeTorches = 0b00000001; // 1
+		const HappyFunTorchTime = 0b00000010; // 2
 	}
 }
+#[derive(Default)]
 struct Color {
 	r: u8, g: u8, b: u8,
 }
+#[derive(Default)]
 struct Inventory {
 
 }
+#[derive(Default)]
 struct Appearance {
 	skin: u8,
 	hair: u8,
@@ -38,9 +43,10 @@ struct Appearance {
 	shoe_color: Color,
 }
 
-struct Player {
-	id: u8,
-	name: String,
+#[derive(Default)]
+pub struct Player {
+	pub id: u8,
+	pub name: String,
 	
 	inventory: Inventory,
 	appearance: Appearance,
