@@ -1,10 +1,11 @@
-extern crate byteorder;
-mod utils;
+#![allow(dead_code)]
 
-use byteorder::{LittleEndian, ReadBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+
 use std::fs::File;
 use std::io;
-use utils::WorldReader;
+
+use crate::utils::{VarintStringReader, VarintStringWriter};
 
 static VERSION: i32 = 230; // 1.4.0.5 version.
 
@@ -47,13 +48,13 @@ impl World {
 		Ok(wld)
 	}
 
-	/*pub fn write_to_file(&self, path: &str) -> Result<(), io::Error> {
+	pub fn write_to_file(&self, path: &str) -> Result<(), io::Error> {
 		let file = File::create(path)?;
 		let mut writer = io::BufWriter::new(file);
 		self.write(&mut writer)?;
 
 		Ok(())
-	}*/
+	}
 
 	pub fn read(reader: &mut impl io::BufRead) -> Result<World, io::Error> {
 		let mut wld = World::default();
@@ -103,8 +104,8 @@ impl World {
 	fn read_world_header(&mut self, reader: &mut impl io::BufRead) -> Result<(), io::Error> {
 		self.name = reader.read_varint_string()?;
 		self.seed = reader.read_varint_string()?; // if VERSION >= 179
-		self.unique_id = reader.read_u128::<LittleEndian>()?;
 		self.world_gen_version = reader.read_u64::<LittleEndian>()?;
+		self.unique_id = reader.read_u128::<LittleEndian>()?;
 
 		self.id = reader.read_i32::<LittleEndian>()?;
 		self.left_world = reader.read_i32::<LittleEndian>()?;
@@ -117,7 +118,7 @@ impl World {
 		Ok(())
 	}
 
-	/*pub fn write(&self, wtr: &mut (impl io::Write + io::Seek)) -> Result<(), io::Error> {
+	pub fn write(&self, wtr: &mut (impl io::Write + io::Seek)) -> Result<(), io::Error> {
 		self.write_file_format_header(wtr)?;
 		self.write_world_header(wtr)?;
 
@@ -166,5 +167,5 @@ impl World {
 		writer.write_varint_string(&self.name)?;
 
 		Ok(())
-	}*/
+	}
 }
