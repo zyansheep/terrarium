@@ -1,20 +1,20 @@
 #![allow(dead_code)]
 
-extern crate tokio;
+use std::error::Error;
+use std::collections::LinkedList;
+use std::sync::Arc;
+
 use tokio::prelude::*;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
-use tokio::io::{ReadHalf, WriteHalf};
 
-use std::error::Error;
-use std::collections::LinkedList;
-use std::sync::{Arc, Mutex};
+use variant_encoding::VarStringAsyncReader;
 
 use crate::world::World;
-
 use crate::player::Player;
 
 enum ClientAction {
+	RequestJoin(),
 	ReceiveChat { chat: String },
 }
 struct Client {
@@ -31,11 +31,11 @@ impl Client {
 	async fn handle_new(socket: TcpStream, mut action_sender: mpsc::Sender<ServerAction>) -> Result<(), Box<dyn Error>> {
 		let mut client = Client::new();
 		
-		let (mut reader, _) = tokio::io::split(socket);
+		let (mut reader, mut _writer) = tokio::io::split(socket);
 		
 		let (broadcast_sender, mut broadcast_receiver) = mpsc::channel(100);
 		
-		action_sender.send(ServerAction::Connect(broadcast_sender)).await;
+		let _ = action_sender.send(ServerAction::Connect(broadcast_sender)).await;
 		
 		// Broadcast thread
 		tokio::spawn(async move {
@@ -55,20 +55,21 @@ impl Client {
 		client.player.name = "Uninitialized".into();
 		// Reader thread
 		loop {
-			if let Ok(id) = reader.read_u8().await {
-				let mut buf = [0; 1024];
-				let n = reader.read(&mut buf).await?;
-				let received = String::from_utf8(buf[0..n].to_vec())?;
-				
-				println!("Received: {}", received);
-			} else {
+			if let Ok(_) = reader.read_u16().await {
+				let msg_type = reader.read_u8().await?;
+				println!("Received Type: {}", msg_type);
+				if msg_type == 1 {
+					println!("Received msg_type 1");
+					
+					let received = reader.read_varstring().await?;
+					println!("{:?}", received);
+				}
+				//let mut buf = [0; 1024];
+				//let n = reader.read(&mut buf).await?;
+				//let received = String::from_utf8(buf[0..n].to_vec())?;
 				break;
 			}
-			
-			
 		}
-		
-		
 		Ok(())
 	}
 }
@@ -96,7 +97,7 @@ impl Server {
 		match val {
 			Connect(s) => self.clients.push_back(s),
 			Chat(s) => println!("Received Chat {}", s),
-			_ => println!("Unimplemented Action")
+			//_ => println!("Unimplemented Action")
 		}
 	}
 	async fn broadcast(&mut self, action: ClientAction) -> Result<(), Box<dyn Error>> {
@@ -107,7 +108,9 @@ impl Server {
 		let arc = Arc::new(action);
 		loop {
 			if let Some(chan) = cursor.peek_next() {
-				chan.send(arc.clone());
+				if let Err(_) = chan.send(arc.clone()).await {
+					cursor.remove_current();
+				}
 			} else {
 				break;
 			}
@@ -131,15 +134,11 @@ impl Server {
 		loop {
 			let (socket, _) = listener.accept().await?; // Wait for new connection
 			
-
-
-
-			
 			let sa_tx_copy = server_action_transmitter.clone();
 			tokio::spawn(async move {
 				// Create new client object 
 				// Initialize Reader and Sender thread
-				Client::handle_new(socket, sa_tx_copy).await;
+				let _ = Client::handle_new(socket, sa_tx_copy).await;
 			});
 		}
 	}

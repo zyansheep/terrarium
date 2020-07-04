@@ -8,10 +8,10 @@ edition = "2018"
 
 [dependencies]
 byteorder = "1.3.4"
-clap = {version = "2.33.1", features = ["yaml"]}
-integer-encoding = "1.1.5"
-serde = {version = "1.0", features = ["derive"]}
+clap = { version = "2.33.1", features = ["yaml"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
 bitflags = "1.2.1"
-tokio = {version = "0.2.21", features = ["full"]}
+tokio = { version = "0.2.21", features = ["full"] }
 tokio-tcp = "0.1.4"
+variant-encoding = { git = "https://github.com/zyansheep/variant-encoding" }

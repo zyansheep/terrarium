@@ -4,8 +4,9 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use std::fs::File;
 use std::io;
+use std::error::Error;
 
-use crate::utils::{VarintStringReader, VarintStringWriter};
+use variant_encoding::{VarStringReader, VarStringWriter};
 
 static VERSION: i32 = 230; // 1.4.0.5 version.
 
@@ -40,7 +41,7 @@ pub struct World {
 }
 
 impl World {
-	pub fn read_from_file(path: &str) -> Result<World, io::Error> {
+	pub fn read_from_file(path: &str) -> Result<World, Box<dyn Error>> {
 		let file = File::open(path)?;
 		let mut reader = io::BufReader::new(file);
 		let wld = World::read(&mut reader)?;
@@ -48,7 +49,7 @@ impl World {
 		Ok(wld)
 	}
 
-	pub fn write_to_file(&self, path: &str) -> Result<(), io::Error> {
+	pub fn write_to_file(&self, path: &str) -> Result<(), Box<dyn Error>> {
 		let file = File::create(path)?;
 		let mut writer = io::BufWriter::new(file);
 		self.write(&mut writer)?;
@@ -56,7 +57,7 @@ impl World {
 		Ok(())
 	}
 
-	pub fn read(reader: &mut impl io::BufRead) -> Result<World, io::Error> {
+	pub fn read(reader: &mut impl io::BufRead) -> Result<World, Box<dyn Error>> {
 		let mut wld = World::default();
 
 		wld.read_file_format_header(reader)?;
@@ -65,7 +66,7 @@ impl World {
 		Ok(wld)
 	}
 
-	fn read_file_format_header(&mut self, reader: &mut impl io::BufRead) -> Result<(), io::Error> {
+	fn read_file_format_header(&mut self, reader: &mut impl io::BufRead) -> Result<(), Box<dyn Error>> {
 		let file_version = reader.read_i32::<LittleEndian>()?; // Version (we are assuming that it is 230.)
 		assert_eq!(file_version, VERSION, "Outdated world file");
 
@@ -101,9 +102,9 @@ impl World {
 		Ok(())
 	}
 
-	fn read_world_header(&mut self, reader: &mut impl io::BufRead) -> Result<(), io::Error> {
-		self.name = reader.read_varint_string()?;
-		self.seed = reader.read_varint_string()?; // if VERSION >= 179
+	fn read_world_header(&mut self, reader: &mut impl io::BufRead) -> Result<(), Box<dyn Error>> {
+		self.name = reader.read_varstring()?;
+		self.seed = reader.read_varstring()?; // if VERSION >= 179
 		self.world_gen_version = reader.read_u64::<LittleEndian>()?;
 		self.unique_id = reader.read_u128::<LittleEndian>()?;
 
@@ -118,30 +119,30 @@ impl World {
 		Ok(())
 	}
 
-	pub fn write(&self, wtr: &mut (impl io::Write + io::Seek)) -> Result<(), io::Error> {
-		self.write_file_format_header(wtr)?;
-		self.write_world_header(wtr)?;
+	pub fn write(&self, writer: &mut (impl io::Write + io::Seek)) -> Result<(), Box<dyn Error>> {
+		self.write_file_format_header(writer)?;
+		self.write_world_header(writer)?;
 
 		Ok(())
 	}
 
-	fn write_file_format_header(&self, wtr: &mut (impl io::Write + io::Seek)) -> Result<(), io::Error> {
-		wtr.write_i32::<LittleEndian>(230)?; // World File Version
+	fn write_file_format_header(&self, writer: &mut (impl io::Write + io::Seek)) -> Result<(), Box<dyn Error>> {
+		writer.write_i32::<LittleEndian>(230)?; // World File Version
 
 		// File metadata
-		wtr.write(b"relogic")?; // Magic letters
-		wtr.write_u8(2)?; // Filetype
-		wtr.write_u32::<LittleEndian>(self.revision)?;
-		wtr.write_u64::<LittleEndian>(self.is_favorite as u64)?;
+		writer.write(b"relogic")?; // Magic letters
+		writer.write_u8(2)?; // Filetype
+		writer.write_u32::<LittleEndian>(self.revision)?;
+		writer.write_u64::<LittleEndian>(self.is_favorite as u64)?;
 
 		// Chunk offsets
-		wtr.write_i16::<LittleEndian>(11)?; // Chunk count
+		writer.write_i16::<LittleEndian>(11)?; // Chunk count
 		for _ in 0..11 {
-			wtr.write_i32::<LittleEndian>(0)?; // Placeholders for after writing all chunks
+			writer.write_i32::<LittleEndian>(0)?; // Placeholders for after writing all chunks
 		}
 
 		// Tile frame important
-		wtr.write_i16::<LittleEndian>(self.tile_frame_important.len() as i16)?;
+		writer.write_i16::<LittleEndian>(self.tile_frame_important.len() as i16)?;
 
 		let mut byte = 0;
 		let mut bit = 0;
@@ -151,20 +152,20 @@ impl World {
 			}
 			bit += 1;
 			if bit == 8 {
-				wtr.write_u8(byte)?;
+				writer.write_u8(byte)?;
 				byte = 0;
 				bit = 0;
 			}
 		}
 		if bit != 0 {
-			wtr.write_u8(byte)?;
+			writer.write_u8(byte)?;
 		}
 
 		Ok(())
 	}
 
-	fn write_world_header(&self, writer: &mut (impl io::Write + io::Seek)) -> io::Result<()> {
-		writer.write_varint_string(&self.name)?;
+	fn write_world_header(&self, writer: &mut (impl io::Write + io::Seek)) -> Result<(), Box<dyn Error>> {
+		writer.write_varstring(&self.name)?;
 
 		Ok(())
 	}

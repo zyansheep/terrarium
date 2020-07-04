@@ -1,22 +1,20 @@
-#![feature(linked_list_cursors)]
-
 #[macro_use]
 extern crate clap;
-extern crate tokio;
-
 use clap::App;
-//use std::error::Error;
 
-// World module
-mod world;
-use world::World;
+#[macro_use]
+extern crate bitflags;
+extern crate tokio;
+extern crate byteorder;
+extern crate variant_encoding;
 
 // Config loading & saving
 mod config;
 use config::Config;
 
-#[macro_use]
-extern crate bitflags;
+// World module
+mod world;
+use world::World;
 
 mod player;
 mod server;
@@ -50,7 +48,7 @@ async fn main() {
 		config.port = port_str.parse().expect("Error, port value not correct");
 	}
 
-	println!("{:#?}", config);
+	//println!("{:#?}", config);
 
 	// Read world file
 	let world = World::read_from_file(&config.world).expect("Could not parse world");

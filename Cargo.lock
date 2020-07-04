@@ -65,9 +65,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.56"
+version = "1.0.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77c1f1d60091c1b73e2b1f4560ab419204b178e625fa945ded7b660becd2bd46"
+checksum = "0fde55d2a2bfaa4c9668bbc63f531fbdeee3ffe188f4662511ce2c22b3eedebe"
 
 [[package]]
 name = "cfg-if"
@@ -172,12 +172,6 @@ checksum = "b9586eedd4ce6b3c498bc3b4dd92fc9f11166aa908a914071953768066c67909"
 dependencies = [
  "libc",
 ]
-
-[[package]]
-name = "integer-encoding"
-version = "1.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f4ebd0bd29be0f11973e9b3e219005661042a019fd757798c36a47c87852625"
 
 [[package]]
 name = "iovec"
@@ -527,11 +521,11 @@ dependencies = [
  "bitflags",
  "byteorder",
  "clap",
- "integer-encoding",
  "serde",
  "serde_yaml",
  "tokio",
  "tokio-tcp",
+ "variant-encoding",
 ]
 
 [[package]]
@@ -653,6 +647,11 @@ name = "unicode-xid"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7fe0bb3479651439c9112f72b6c505038574c9fbb575ed1bf3b797fa39dd564"
+
+[[package]]
+name = "variant-encoding"
+version = "1.1.5"
+source = "git+https://github.com/zyansheep/variant-encoding#785d4ce243eaee3ddd2407d42091867d26f76349"
 
 [[package]]
 name = "vec_map"
