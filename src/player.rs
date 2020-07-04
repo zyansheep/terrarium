@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-#![warn(unused_must_use)]
+#![allow(non_upper_case_globals)]
 
 bitflags! {
 	#[derive(Default)]
