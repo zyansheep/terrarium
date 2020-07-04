@@ -8,8 +8,6 @@ use tokio::prelude::*;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 
-use variant_encoding::VarStringAsyncReader;
-
 use crate::world::World;
 use crate::player::Player;
 
@@ -55,14 +53,19 @@ impl Client {
 		client.player.name = "Uninitialized".into();
 		// Reader thread
 		loop {
+			let mut buf = vec![0u8; 1024];
+			reader.poll_read(&mut buf).await?;
+			
 			if let Ok(_) = reader.read_u16().await {
 				let msg_type = reader.read_u8().await?;
 				println!("Received Type: {}", msg_type);
+
 				if msg_type == 1 {
 					println!("Received msg_type 1");
 					
-					let received = reader.read_varstring().await?;
-					println!("{:?}", received);
+					
+					//let received = reader.read_varstring().await?;
+					//println!("{:?}", received);
 				}
 				//let mut buf = [0; 1024];
 				//let n = reader.read(&mut buf).await?;
@@ -101,11 +104,12 @@ impl Server {
 		}
 	}
 	async fn broadcast(&mut self, action: ClientAction) -> Result<(), Box<dyn Error>> {
+		let action_counter = Arc::new(action); // Shared resource (READ ONLY!!!)
+		
 		// Loop through all client channels, dropping any that Err
 		
-		let mut cursor = self.clients.cursor_front_mut();
-		
-		let arc = Arc::new(action);
+		// Using Nightly Feature std::collections::linked_list::Cursor;
+		/*let mut cursor = self.clients.cursor_front_mut();
 		loop {
 			if let Some(chan) = cursor.peek_next() {
 				if let Err(_) = chan.send(arc.clone()).await {
@@ -114,7 +118,17 @@ impl Server {
 			} else {
 				break;
 			}
+		}*/
+		
+		let mut new_clients = LinkedList::new();
+		loop {
+			if let Some(mut chan) = self.clients.pop_front() {
+				if let Ok(_) = chan.send(action_counter.clone()).await {
+					new_clients.push_back(chan);
+				} // Else, channel sender dropped
+			} else { break; }
 		}
+		self.clients = new_clients;
 		
 		Ok(())
 	}
