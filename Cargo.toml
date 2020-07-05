@@ -15,3 +15,5 @@ bitflags = "1.2.1"
 tokio = { version = "0.2.21", features = ["full"] }
 tokio-tcp = "0.1.4"
 variant-encoding = { git = "https://github.com/zyansheep/variant-encoding" }
+bytes = "0.5.5"
+quick-error = "1.2.3"

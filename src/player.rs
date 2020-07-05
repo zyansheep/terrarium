@@ -18,15 +18,15 @@ bitflags! {
 		const HappyFunTorchTime = 0b00000010; // 2
 	}
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Color {
 	r: u8, g: u8, b: u8,
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Inventory {
 
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Appearance {
 	skin: u8,
 	hair: u8,
@@ -43,7 +43,7 @@ struct Appearance {
 	shoe_color: Color,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Player {
 	pub id: u8,
 	pub name: String,

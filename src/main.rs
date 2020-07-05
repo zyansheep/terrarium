@@ -1,9 +1,8 @@
-#[macro_use]
-extern crate clap;
+#[macro_use] extern crate clap;
 use clap::App;
 
-#[macro_use]
-extern crate bitflags;
+#[macro_use] extern crate bitflags;
+#[macro_use] extern crate quick_error;
 extern crate tokio;
 extern crate byteorder;
 extern crate variant_encoding;
@@ -16,6 +15,7 @@ use config::Config;
 mod world;
 use world::World;
 
+mod packet;
 mod player;
 mod server;
 use server::Server;

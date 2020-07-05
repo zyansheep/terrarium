@@ -3,11 +3,14 @@
 use std::error::Error;
 use std::collections::LinkedList;
 use std::sync::Arc;
+use std::io;
 
-use tokio::prelude::*;
+use tokio::io::{AsyncReadExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 
+
+use crate::packet::Packet;
 use crate::world::World;
 use crate::player::Player;
 
@@ -19,6 +22,8 @@ struct Client {
 	id: u8, // What the client thinks its index is
 	player: Player,
 }
+
+
 impl Client {
 	fn new() -> Self {
 		Client {
@@ -31,8 +36,8 @@ impl Client {
 		
 		let (mut reader, mut _writer) = tokio::io::split(socket);
 		
+		// Initialize broadcast channel and send to server
 		let (broadcast_sender, mut broadcast_receiver) = mpsc::channel(100);
-		
 		let _ = action_sender.send(ServerAction::Connect(broadcast_sender)).await;
 		
 		// Broadcast thread
@@ -52,26 +57,17 @@ impl Client {
 		
 		client.player.name = "Uninitialized".into();
 		// Reader thread
+		let mut buf = [0u8; 1024];
 		loop {
-			let mut buf = vec![0u8; 1024];
-			reader.poll_read(&mut buf).await?;
+			reader.read(&mut buf).await?;
+			//reader.read_buf(&mut buf).await?; // Read to temp buffer
+			//reader.poll_read(&mut buf).await?;
+			let mut bufr = io::BufReader::new(&buf[..]); //create tmp bufreader
 			
-			if let Ok(_) = reader.read_u16().await {
-				let msg_type = reader.read_u8().await?;
-				println!("Received Type: {}", msg_type);
-
-				if msg_type == 1 {
-					println!("Received msg_type 1");
-					
-					
-					//let received = reader.read_varstring().await?;
-					//println!("{:?}", received);
-				}
-				//let mut buf = [0; 1024];
-				//let n = reader.read(&mut buf).await?;
-				//let received = String::from_utf8(buf[0..n].to_vec())?;
-				break;
-			}
+			let pkt = Packet::read(&mut bufr).unwrap(); // Parse packet
+			println!("{:?}", pkt);
+			
+			break;
 		}
 		Ok(())
 	}
@@ -146,13 +142,13 @@ impl Server {
 		});
 		
 		loop {
-			let (socket, _) = listener.accept().await?; // Wait for new connection
+			let (socket, _) = listener.accept().await?; // Wait for new connection (or return Err)
 			
 			let sa_tx_copy = server_action_transmitter.clone();
 			tokio::spawn(async move {
 				// Create new client object 
 				// Initialize Reader and Sender thread
-				let _ = Client::handle_new(socket, sa_tx_copy).await;
+				let _ = Client::handle_new(socket, sa_tx_copy).await; // TODO: Log client errors...
 			});
 		}
 	}
