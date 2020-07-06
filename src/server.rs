@@ -22,14 +22,14 @@ enum ClientAction {
 }
 struct Client {
 	id: u8, // What the client thinks its index is
-	player: Box<Player>,
+	player: Player,
 	action: mpsc::Sender<Arc<ClientAction>>,
 }
 impl Client {
 	fn new(action: mpsc::Sender<Arc<ClientAction>>) -> Self {
 		Client {
 			id: 0,
-			player: Box::new(Player::default()),
+			player: Player::default(),
 			action,
 		}
 	}
@@ -71,25 +71,33 @@ impl Client {
 		});
 		
 		client.player.name = "Uninitialized".into();
+		
 		// Reader thread
 		let mut packet_reader = FramedRead::new(reader, PacketCodec::default());
 		loop {
-			let result = packet_reader.try_next().await;
+			let result = packet_reader.try_next().await; // Try to Decode Packet
+			
 			if let Ok(packet_or_none) = result {
-				if let Some(packet) = packet_or_none {
-					println!("Read Packet: {:?}", packet);
+				if let Some(packet) = packet_or_none { // Check if packet was read
+					println!("Decoded Packet: {:?}", packet);
 					match packet {
 						Packet::ConnectRequest(s) => {
 							if s == "Terraria230"{
 								client.send_packet(Packet::SetUserSlot(0)).await? // Every client is always in user slot 0 (other players are dynamically set up to 256 user slots)
 							} else {
-								// Send disconnect packet and drop connection
+								// Send disconnect packet (wrong error) and drop connection
 							}
 						},
+						Packet::PlayerInfo(player) => {
+							client.player = player;
+						}
 						_ => warn!("Unimplemented Packet"), 
 					}
 				}else{ continue; }
-			} else { info!("Error with reading packet: Disconnecting"); break; } //Else, stream closed
+			} else {
+				info!("Error with reading packet: Disconnecting {:?}", result);
+				break;
+			}
 		}
 		Ok(())
 	}
