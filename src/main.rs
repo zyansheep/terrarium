@@ -6,6 +6,7 @@ use clap::App;
 extern crate tokio;
 extern crate byteorder;
 extern crate variant_encoding;
+extern crate log;
 
 // Config loading & saving
 mod config;
