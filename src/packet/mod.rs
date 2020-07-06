@@ -9,8 +9,8 @@ use bytes::{BytesMut, BufMut, Bytes, Buf};
 
 use crate::player::{Player, PlayerParseError };
 
-pub mod packet_types;
-use packet_types::NetworkText;
+pub mod types;
+use types::NetworkText;
 
 quick_error! {
 	#[derive(Debug)]

@@ -16,6 +16,13 @@ pub struct NetworkText {
 	substitution: Vec<NetworkText>,
 }
 impl NetworkText {
+	pub fn new(string: &str) -> Self {
+		NetworkText {
+			mode: NetworkTextMode::Literal,
+			text: string.to_owned(),
+			substitution: vec![],
+		}
+	}
 	pub fn write(&self, writer: &mut impl io::Write) -> Result<(), io::Error> {
 		writer.write_u8(self.mode as u8)?;
 		writer.write_varstring(&self.text)?;
