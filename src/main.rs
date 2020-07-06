@@ -1,12 +1,7 @@
 #[macro_use] extern crate clap;
-use clap::App;
-
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate quick_error;
-extern crate tokio;
-extern crate byteorder;
-extern crate variant_encoding;
-extern crate log;
+use clap::App;
 
 // Config loading & saving
 mod config;
@@ -28,7 +23,7 @@ async fn main() {
 
 	use std::path::Path;
 
-	let mut config = Config::new(7777, "world.wld"); // Default port 7777, default world file name "world.wld" (in CWD)
+	let mut config = Config::new("127.0.0.1", 7777, "world.wld"); // Default port 7777, default world file name "world.wld" (in CWD)
 
 	// if config file path passed, use that
 	let mut config_path = Path::new("config.yml"); // Otherwise, use config.yml in current directory if exists
@@ -56,9 +51,8 @@ async fn main() {
 	//println!("{:?}", world);
 	// Write world file
 	//world.write_to_file("write_test.wld").unwrap();
-
-	let address = "127.0.0.1:7777";
-	let server = Server::new(world, address);
+	
+	let server = Server::new(world, &config.get_address());
 	
 	server.start().await.unwrap(); // Run Server
 }

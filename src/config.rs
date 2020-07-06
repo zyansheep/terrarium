@@ -10,6 +10,7 @@ use std::path::Path;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
+	pub addr: String,
 	pub port: u16,
 	pub world: String,
 	#[serde(skip_serializing, skip_deserializing)]
@@ -17,11 +18,12 @@ pub struct Config {
 }
 
 impl Config {
-	pub fn new(port: u16, world: &str) -> Self {
+	pub fn new(addr: &str, port: u16, world: &str) -> Self {
 		Config {
+			addr: addr.to_owned(),
 			port: port,
 			world: world.to_owned(),
-			from_file: false
+			from_file: false,
 		}
 	}
 
@@ -36,5 +38,8 @@ impl Config {
 		let file = File::create(path)?;
 		serde_yaml::to_writer(file, self)?;
 		Ok(())
+	}
+	pub fn get_address(&self) -> String {
+		format!("{}:{}", self.addr, self.port)
 	}
 }
