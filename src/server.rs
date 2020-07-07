@@ -3,7 +3,7 @@
 
 use std::error::Error;
 use std::sync::Arc;
-use log::{info, trace, warn};
+use log::{trace, debug, info, warn, error};
 
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
@@ -11,7 +11,7 @@ use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio::stream::{self, StreamExt};
 use futures::sink::SinkExt;
 
-use crate::packet::{Packet, PacketCodec, PacketError};
+use crate::packet::{Packet, PacketCodec, PacketError, types::NetworkText};
 use crate::world::World;
 use crate::player::Player;
 
@@ -36,9 +36,8 @@ impl Client {
 	async fn send_packet(&mut self, packet: Packet) -> Result< (), mpsc::error::SendError<Arc<ClientAction>> > {
 		self.action.send( Arc::new(ClientAction::SendPacket(packet)) ).await
 	}
-	async fn handle_new(socket: TcpStream, mut action_sender: mpsc::Sender<ServerAction>) -> Result<(), Box<dyn Error>> {
+	async fn handle_new(socket: TcpStream, mut action_sender: mpsc::Sender<ServerAction>) -> Result<Client, Box<dyn Error>> {
 		info!(target: "client_handle", "New Client Connected {:?}", socket);
-
 		
 		let (reader, writer) = tokio::io::split(socket);
 		
@@ -55,22 +54,20 @@ impl Client {
 			loop {
 				if let Some(action) = action_receiver.recv().await {
 					use ClientAction::*;
-					println!("Sending ClientAction: {:?}", action);
+					debug!("Sending ClientAction: {:?}", action);
 					let result = match &*action {
 						SendPacket(packet) => packet_writer.send(&packet).await,
 						//ReceiveChat{ ref chat } => println!("Sending Chat: \"{}\"", chat),
-						_ => Ok(info!("Unimplemented ClientAction Received: {:?}", action)),
+						_ => Ok(warn!("Unimplemented ClientAction Received: {:?}", action)),
 					};
 					if let Err(_) = result {
-						warn!("Error with sending packet, Disconnecting"); break;
+						error!("Error with parsing ClientAction, Disconnecting"); break;
 					}
 				} else {
 					break;
 				}
 			}
 		});
-		
-		client.player.name = "Uninitialized".into();
 		
 		// Reader thread
 		let mut packet_reader = FramedRead::new(reader, PacketCodec::default());
@@ -79,27 +76,29 @@ impl Client {
 			
 			if let Ok(packet_or_none) = result {
 				if let Some(packet) = packet_or_none { // Check if packet was read
-					println!("Decoded Packet: {:?}", packet);
+					info!("Decoded Packet: {:?}", packet);
+					
+					use Packet::*;
 					match packet {
 						Packet::ConnectRequest(s) => {
 							if s == "Terraria230"{
 								client.send_packet(Packet::SetUserSlot(0)).await? // Every client is always in user slot 0 (other players are dynamically set up to 256 user slots)
 							} else {
-								// Send disconnect packet (wrong error) and drop connection
+								client.send_packet(Packet::Disconnect(NetworkText::new("Wrong Version! Need Terraria 1.4.0.5"))).await?
 							}
 						},
-						Packet::PlayerInfo(player) => {
-							client.player = player;
-						}
+						Packet::PlayerAppearance(appearance) => client.player.appearance.init(appearance)?,
+						Packet::PlayerUUID(s) => client.player.uuid = s,
+						PlayerHp{..} | PlayerMana{..} | PlayerBuff{..} => client.player.status.init(packet)?,
 						_ => warn!("Unimplemented Packet"), 
 					}
 				}else{ continue; }
 			} else {
-				info!("Error with reading packet: Disconnecting {:?}", result);
+				error!("Error with reading packet: {:?}", result);
 				break;
 			}
 		}
-		Ok(())
+		Ok(client)
 	}
 }
 
@@ -152,18 +151,17 @@ impl Server {
 						}
 					}
 				}
-				Chat(s) => println!("Received Chat {}", s),
-				//_ => println!("Unimplemented Action")
+				Chat(s) => info!("Received Chat {}", s),
+				//_ => warn!("Unimplemented Action")
 			}
 		}
 	}
 	
 	pub async fn start(mut self) -> Result<(), Box<dyn Error>> {
 		let mut listener = TcpListener::bind(&self.addr).await?;
-		println!("Starting Terraria Server on {}", &self.addr);
+		info!("Starting Terraria Server on {}", &self.addr);
 		
 		// Channel to send actions from client thread to server thread
-		
 		let sa_channel = self.action.clone();
 		// Action handler that listens on channel (so players can update world)
 		tokio::spawn(async move {
@@ -177,7 +175,11 @@ impl Server {
 			tokio::spawn(async move {
 				// Create new client object 
 				// Initialize Reader and Sender thread
-				let _ = Client::handle_new(socket, sa_tx_copy).await; // TODO: Log client errors...
+				let result = Client::handle_new(socket, sa_tx_copy).await; // TODO: Log client errors...
+				match result {
+					Err(error) => warn!("Client Error: {}", error),
+					Ok(client) => info!("Client Disconnected {}", client.player.appearance.name),
+				}
 			});
 		}
 	}

@@ -7,9 +7,17 @@ use std::io;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use variant_encoding::{VarStringReader, VarStringWriter};
 
+#[derive(Error, Debug)]
+pub enum PlayerError {
+	#[error("Error Reading / Writing Packet Data")]
+	ReadError(#[from] io::Error),
+	#[error("Packet received that wrote to unmodifiable field")]
+	WrongField(&'static str),
+}
+
 bitflags! {
 	#[derive(Default)]
-	struct Difficulty: u8 {
+	pub struct Difficulty: u8 {
 		const Softcore 		= 0b00000000; // 0
 		const Mediumcore 	= 0b00000001; // 1
 		const Harcore 		= 0b00000010; // 2
@@ -19,13 +27,13 @@ bitflags! {
 }
 bitflags! {
 	#[derive(Default)]
-	struct TorchState: u8 {
+	pub struct TorchState: u8 {
 		const UsingBiomeTorches = 0b00000001; // 1
 		const HappyFunTorchTime = 0b00000010; // 2
 	}
 }
-#[derive(Default, Debug)]
-struct Color {
+#[derive(Default, Debug, PartialEq)]
+pub struct Color {
 	r: u8, g: u8, b: u8,
 }
 impl Color {
@@ -37,74 +45,118 @@ impl Color {
 		})
 	}
 }
-#[derive(Default, Debug)]
-struct Inventory {
+#[derive(Default, Debug, PartialEq)]
+pub struct Inventory {
 
 }
 
-#[derive(Default, Debug)]
-struct Appearance {
-	skin: u8,
-	hair: u8,
-	hair_dye: u8,
-	hide_visuals_1: u8,
-	hide_visuals_2: u8,
-	hide_misc: u8,
-	hair_color: Color,
-	skin_color: Color,
-	eye_color: Color,
-	shirt_color: Color,
-	under_shift_color: Color,
-	pants_color: Color,
-	shoe_color: Color,
-}
-
-#[derive(Default, Debug)]
-pub struct Player {
-	pub id: u8,
+#[derive(Default, Debug, PartialEq)]
+pub struct Appearance {
 	pub name: String,
 	
-	inventory: Inventory,
-	appearance: Appearance,
-
-	difficulty: Difficulty,
-	torch_state: TorchState,
+	pub skin: u8,
+	pub hair: u8,
+	pub hair_dye: u8,
+	pub hide_visuals_1: u8,
+	pub hide_visuals_2: u8,
+	pub hide_misc: u8,
+	pub hair_color: Color,
+	pub skin_color: Color,
+	pub eye_color: Color,
+	pub shirt_color: Color,
+	pub under_shift_color: Color,
+	pub pants_color: Color,
+	pub shoe_color: Color,
+	
+	pub unknown_color: Color,
+	pub unknown_trait: u8,
+	pub unknown_trait2: u8,
 }
-
-quick_error!{
-	#[derive(Debug)]
-	pub enum PlayerParseError {
-		IO(err: io::Error){ from() }
-		InvalidID(id_received: u8, id_have: u8) {
-			display("Invalid ID Received: {}, have: {}", id_received, id_have)
+impl Appearance {
+	pub fn read(reader: &mut impl io::BufRead) -> Result<Appearance, crate::packet::PacketError> {
+		let mut appearance = Appearance::default();
+		appearance.skin = reader.read_u8()?;
+		appearance.hair = reader.read_u8()?;
+		
+		appearance.name = reader.read_varstring()?;
+		
+		appearance.hair_dye = reader.read_u8()?;
+		appearance.hide_visuals_1 = reader.read_u8()?;
+		appearance.hide_visuals_2 = reader.read_u8()?;
+		appearance.hide_misc = reader.read_u8()?;
+		appearance.hair_color = Color::read(reader)?;
+		appearance.skin_color = Color::read(reader)?;
+		appearance.eye_color = Color::read(reader)?;
+		appearance.shirt_color = Color::read(reader)?;
+		appearance.under_shift_color = Color::read(reader)?;
+		appearance.pants_color = Color::read(reader)?;
+		appearance.shoe_color = Color::read(reader)?;
+		
+		appearance.unknown_color = Color::read(reader)?;
+		appearance.unknown_trait = reader.read_u8()?;
+		appearance.unknown_trait2 = reader.read_u8()?;
+		
+		Ok(appearance)
+	}
+	pub fn init(&mut self, other: Appearance) -> Result<(), PlayerError> { 
+		if self.name.is_empty() {
+			Err(PlayerError::WrongField("Can't Modify Player Appearance"))
+		} else {
+			*self = other;
+			println!("{:?}", self);
+			Ok(())
 		}
 	}
 }
 
-use std::error::Error;
-impl Player {
-	pub fn parse_player_info_packet(&mut self, reader: &mut impl io::BufRead) -> Result<(), PlayerParseError> {
-		let parsed_id = reader.read_u8()?;
-		if self.id != parsed_id {
-			return Err(PlayerParseError::InvalidID(parsed_id, self.id));
+#[derive(Default, Debug, PartialEq)]
+pub struct Status {
+	pub hp: u16,
+	pub max_hp: u16,
+	
+	pub mana: u16,
+	pub max_mana: u16,
+	
+	pub buffs: [u16; 22],
+}
+use crate::packet::Packet;
+impl Status {
+	pub fn init(&mut self, packet: Packet) -> Result<(), PlayerError> {
+		match packet {
+			Packet::PlayerHp{hp: _, max_hp} => {
+				if self.max_hp == 0 {
+					self.max_hp = max_hp;
+					self.hp = self.max_hp;
+					Ok(())
+				} else { Err(PlayerError::WrongField("Can't Modify Hp")) }
+			},
+			Packet::PlayerMana{mana: _, max_mana} => {
+				if self.max_mana == 0 {
+					self.max_mana = max_mana;
+					self.mana = self.max_mana;
+					Ok(())
+				} else { Err(PlayerError::WrongField("Can't Modify Mana")) }
+			},
+			Packet::PlayerBuff{buffs} => {
+				if self.buffs == [0u16; 22] {
+					self.buffs = buffs;
+					Ok(())
+				} else { Err(PlayerError::WrongField("Can't Modify Buffs")) }
+			},
+			_ => Err(PlayerError::WrongField("Unknown Status Packet")),
 		}
-		self.appearance.skin = reader.read_u8()?;
-		self.appearance.hair = reader.read_u8()?;
-		
-		self.name = reader.read_varstring()?;
-		
-		self.appearance.hair_dye = reader.read_u8()?;
-		self.appearance.hide_visuals_1 = reader.read_u8()?;
-		self.appearance.hide_visuals_2 = reader.read_u8()?;
-		self.appearance.hide_misc = reader.read_u8()?;
-		self.appearance.hair_color = Color::read(reader)?;
-		self.appearance.skin_color = Color::read(reader)?;
-		self.appearance.eye_color = Color::read(reader)?;
-		self.appearance.shirt_color = Color::read(reader)?;
-		self.appearance.under_shift_color = Color::read(reader)?;
-		self.appearance.pants_color = Color::read(reader)?;
-		self.appearance.shoe_color = Color::read(reader)?;
-		
-		Ok(())
 	}
+}
+
+#[derive(Default, Debug, PartialEq)]
+pub struct Player {
+	pub id: u8,
+	pub uuid: String, // uuid of the player TODO: what is this used for?
+	
+	pub status: Status, // Holds hp, mana, buffs etc.
+	pub inventory: Inventory, // Whats in your inventory?
+	pub appearance: Appearance, // Appearance information
+
+	pub difficulty: Difficulty,
+	pub torch_state: TorchState,
 }

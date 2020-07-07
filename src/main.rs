@@ -1,9 +1,15 @@
 #[macro_use] extern crate clap;
 #[macro_use] extern crate bitflags;
-#[macro_use] extern crate quick_error;
+#[macro_use] extern crate thiserror;
+extern crate log;
+extern crate env_logger;
+
 use clap::App;
+use log::LevelFilter;
+use env_logger::Builder;
 
 // Config loading & saving
+
 mod config;
 use config::Config;
 
@@ -13,16 +19,23 @@ use world::World;
 
 mod packet;
 mod player;
+
+mod errors;
+
 mod server;
 use server::Server;
 
 #[tokio::main]
 async fn main() {
+	let mut builder = Builder::new();
+    builder.filter_level(LevelFilter::Trace);
+	builder.init();
+	
 	let yaml_args = load_yaml!("app.yml");
 	let matches = App::from_yaml(yaml_args).get_matches();
 
 	use std::path::Path;
-
+	
 	let mut config = Config::new("127.0.0.1", 7777, "world.wld"); // Default port 7777, default world file name "world.wld" (in CWD)
 
 	// if config file path passed, use that

@@ -7,38 +7,32 @@ use variant_encoding::{VarStringReader, VarIntReader, VarIntWriter};
 use tokio_util::codec::{Decoder, Encoder};
 use bytes::{BytesMut, BufMut, Bytes, Buf};
 
-use crate::player::{Player, PlayerParseError };
+use crate::player::{self, Player, PlayerError};
 
 pub mod types;
 use types::NetworkText;
 
-quick_error! {
-	#[derive(Debug)]
-	pub enum PacketError {
-		IO(err: io::Error){ from() }
-		UnknownType(pkt_type: u8) {
-			display("Unknown Packet Type: {}", pkt_type)
-		}
-		UnimplementedPacket {
-			display("Packet Not Implemented")
-		}
-		InvalidSize(packet_size: usize, buffer_size: usize) {
-			display("Invalid Packet Size: Told: {}, Found: {}", packet_size, buffer_size)
-		}
-		
-		// Specific Parsing Errors
-		PlayerParse(err: PlayerParseError) { from() }
-	}
+#[derive(Error, Debug)]
+pub enum PacketError {
+	#[error("Error parsing packet")]
+	CodecError(#[from] io::Error),
+	#[error("Unknown Packet Type: {0}")]
+	UnknownType(u8),
+	#[error("Packet Not Implemented")]
+	Unimplemented,
+	#[error("Invalid Packet Size: Told: {0}, Found: {1}")]
+	InvalidSize(usize, usize)
 }
 
 //File that reads terraria's packets into nice little structures
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Packet {
 	Empty(), // Default value
 	
 	// Packets that are received only
 	ConnectRequest(String), // Client asks server if correct version
 	WorldDataRequest(),
+	PlayerUUID(String),
 	
 	// Packets that are sent out to individual clients
 	SetUserSlot(u8), // Tell client what to refer to themselves as (why is this a single byte???)
@@ -46,7 +40,10 @@ pub enum Packet {
 	Disconnect(NetworkText),
 	
 	// Packets that are received, (possibly modified) and then broadcast to all clients
-	PlayerInfo(Player),
+	PlayerAppearance(player::Appearance),
+	PlayerHp{hp: u16, max_hp: u16},
+	PlayerMana{mana: u16, max_mana: u16},
+	PlayerBuff{buffs: [u16; 22]},
 }
 
 #[derive(Default)]
@@ -59,28 +56,45 @@ impl Decoder for PacketCodec {
 		println!("Started Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
 		
 		let mut reader = src.bytes();
-		let size: usize = reader.read_varint()?;
-		if size != src.remaining() { return Err(PacketError::InvalidSize(size, src.remaining())) } // Error: packet size doesn't match what packet says its size should be
+		let size = reader.read_u16::<LittleEndian>()? as usize; //First 2 bytes are size (sometimes?) TODO: figure this out
+		let bytes_left = src.remaining();
+		// NetMessage.cs only errors when bytes_left is less than read size
+		if size > bytes_left { return Err(PacketError::InvalidSize(size, bytes_left)) } // Error: packet size doesn't match what packet says its size should be
 		
-		reader.read_u8()?;
 		let msg_type = reader.read_u8()?;
 		println!("Recevied Packet Type: {}", msg_type);
 		
-		let packet: Result<Option<Self::Item>, Self::Error>;
+
 		use Packet::*;
-		match msg_type {
-			1 => packet = Ok(Some(ConnectRequest(reader.read_varstring()?))),
-			4 => packet = {
-				let mut player = Player::default();
-				player.parse_player_info_packet(&mut reader)?;
-				Ok(Some(PlayerInfo(player)))
+		let packet = match msg_type {
+			1 => ConnectRequest(reader.read_varstring()?),
+			4 => {
+				reader.read_u8()?; // Read Player ID
+				PlayerAppearance(player::Appearance::read(&mut reader)?)
 			}, // Construct player struct
-			_ => packet = Err( PacketError::UnknownType(msg_type) ),
+			68 => PlayerUUID(reader.read_varstring()?),
+			16 => {
+				reader.read_u8()?; // Read Player ID
+				PlayerHp {
+					hp: reader.read_u16::<LittleEndian>()?,
+					max_hp: reader.read_u16::<LittleEndian>()?
+				}
+			},
+			42 => {
+				reader.read_u8()?; // Read Player ID
+				PlayerMana {
+					mana: reader.read_u16::<LittleEndian>()?,
+					max_mana: reader.read_u16::<LittleEndian>()?
+				}
+			}
+			_ => Packet::Empty(),
 		};
-		src.advance(src.remaining()); // Treat packet as entirely read
 		println!("Finished Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
+		src.advance(src.remaining()); // Treat packet as entirely read
+		//println!("Finished Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
 		
-		packet
+		if packet == Packet::Empty() { return Err(PacketError::UnknownType(msg_type)) }
+		Ok(Some(packet))
 	}
 }
 impl Encoder<&Packet> for PacketCodec {
@@ -98,8 +112,10 @@ impl Encoder<&Packet> for PacketCodec {
 			},
 			Disconnect(text) => {
 				text.write(&mut writer)?;
+				dst.put_u8(writer.len() as u8);
+				dst.put_u8(0);
 			}
-			_ => return Err(PacketError::UnimplementedPacket),
+			_ => return Err(PacketError::Unimplemented),
 		};
 		
 		dst.put_slice(&writer[..]); // flush writer to destination

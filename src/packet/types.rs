@@ -9,7 +9,7 @@ use variant_encoding::{VarStringReader, VarStringWriter};
 enum NetworkTextMode {
 	Literal = 0u8, Formattable = 1, LocalizationKey = 2,
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct NetworkText {
 	mode: NetworkTextMode,
 	text: String,
