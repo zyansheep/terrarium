@@ -5,7 +5,7 @@ use std::io;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use variant_encoding::{VarStringReader, VarIntReader, VarIntWriter};
 use tokio_util::codec::{Decoder, Encoder};
-use bytes::{BytesMut, BufMut, Bytes, Buf};
+use bytes::{BytesMut, BufMut, Bytes, Buf, buf::{BufExt, BufMutExt}};
 
 use crate::player::{self, Player, PlayerError};
 
@@ -16,12 +16,14 @@ use types::NetworkText;
 pub enum PacketError {
 	#[error("Error parsing packet")]
 	CodecError(#[from] io::Error),
+	#[error("Invalid Packet Data")]
+	InvalidField,
 	#[error("Unknown Packet Type: {0}")]
 	UnknownType(u8),
 	#[error("Packet Not Implemented")]
 	Unimplemented,
-	#[error("Invalid Packet Size: Told: {0}, Found: {1}")]
-	InvalidSize(usize, usize)
+	#[error("Invalid Packet Size: Told: {told}, Found: {found}")]
+	InvalidSize{told: usize, found: usize}
 }
 
 //File that reads terraria's packets into nice little structures
@@ -44,6 +46,7 @@ pub enum Packet {
 	PlayerHp{hp: u16, max_hp: u16},
 	PlayerMana{mana: u16, max_mana: u16},
 	PlayerBuff{buffs: [u16; 22]},
+	PlayerInventorySlot{slot_index: u16, amount: u16, item_prefix: u8, net_id: u16},
 }
 
 #[derive(Default)]
@@ -55,15 +58,16 @@ impl Decoder for PacketCodec {
 		if src.remaining() == 0 { return Ok(None) } // No data to read
 		println!("Started Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
 		
-		let mut reader = src.bytes();
-		let size = reader.read_u16::<LittleEndian>()? as usize; //First 2 bytes are size (sometimes?) TODO: figure this out
 		let bytes_left = src.remaining();
+		let size = src.get_u16_le() as usize; //First 2 bytes are size (sometimes?) TODO: figure this out
 		// NetMessage.cs only errors when bytes_left is less than read size
-		if size > bytes_left { return Err(PacketError::InvalidSize(size, bytes_left)) } // Error: packet size doesn't match what packet says its size should be
+		if size > bytes_left { return Err(PacketError::InvalidSize{told: size, found: bytes_left}) } // Error: packet size doesn't match what packet says its size should be
+
+		println!("Bytes Left: {}", src.remaining());
+		let mut reader = src.reader();
 		
 		let msg_type = reader.read_u8()?;
 		println!("Recevied Packet Type: {}", msg_type);
-		
 
 		use Packet::*;
 		let packet = match msg_type {
@@ -73,24 +77,40 @@ impl Decoder for PacketCodec {
 				PlayerAppearance(player::Appearance::read(&mut reader)?)
 			}, // Construct player struct
 			68 => PlayerUUID(reader.read_varstring()?),
-			16 => {
+			16 => { // Player Health
 				reader.read_u8()?; // Read Player ID
 				PlayerHp {
 					hp: reader.read_u16::<LittleEndian>()?,
 					max_hp: reader.read_u16::<LittleEndian>()?
 				}
 			},
-			42 => {
+			42 => { // Player Mana
 				reader.read_u8()?; // Read Player ID
 				PlayerMana {
 					mana: reader.read_u16::<LittleEndian>()?,
 					max_mana: reader.read_u16::<LittleEndian>()?
 				}
 			}
+			50 => { // Player Buffs
+				reader.read_u8()?; // Read Player ID
+				let mut buffs = [0u16; 22];
+				reader.read_u16_into::<LittleEndian>(&mut buffs)?;
+				PlayerBuff {
+					buffs: buffs
+				}
+			}
+			5 => {
+				reader.read_u8()?; // Read Player ID
+				PlayerInventorySlot {
+					slot_index: reader.read_u16::<LittleEndian>()?,
+					amount: reader.read_u16::<LittleEndian>()?,
+					item_prefix: reader.read_u8()?,
+					net_id: reader.read_u16::<LittleEndian>()?,
+				}
+			}
 			_ => Packet::Empty(),
 		};
 		println!("Finished Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
-		src.advance(src.remaining()); // Treat packet as entirely read
 		//println!("Finished Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
 		
 		if packet == Packet::Empty() { return Err(PacketError::UnknownType(msg_type)) }

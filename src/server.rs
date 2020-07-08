@@ -90,6 +90,7 @@ impl Client {
 						Packet::PlayerAppearance(appearance) => client.player.appearance.init(appearance)?,
 						Packet::PlayerUUID(s) => client.player.uuid = s,
 						PlayerHp{..} | PlayerMana{..} | PlayerBuff{..} => client.player.status.init(packet)?,
+						PlayerInventorySlot{..} => client.player.inventory.update_slot(packet)?, //TODO: Impl config flag to have server-side managed inventory (e.g. drop this packet)
 						_ => warn!("Unimplemented Packet"), 
 					}
 				}else{ continue; }
