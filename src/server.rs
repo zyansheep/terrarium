@@ -12,7 +12,7 @@ use tokio::stream::{self, StreamExt};
 use futures::sink::SinkExt;
 
 use crate::packet::{Packet, PacketCodec, PacketError, types::NetworkText};
-use crate::world::World;
+use terrarium_world::World;
 use crate::player::Player;
 
 #[derive(Debug)]
@@ -36,14 +36,14 @@ impl Client {
 	async fn send_packet(&mut self, packet: Packet) -> Result< (), mpsc::error::SendError<Arc<ClientAction>> > {
 		self.action.send( Arc::new(ClientAction::SendPacket(packet)) ).await
 	}
-	async fn handle_new(socket: TcpStream, mut action_sender: mpsc::Sender<ServerAction>) -> Result<Client, Box<dyn Error>> {
+	async fn handle_new(socket: TcpStream, mut server_action: mpsc::Sender<ServerAction>) -> Result<Client, Box<dyn Error>> {
 		info!(target: "client_handle", "New Client Connected {:?}", socket);
 		
 		let (reader, writer) = tokio::io::split(socket);
 		
 		// Send clientaction chanel to server
 		let (action, mut action_receiver) = mpsc::channel(100);
-		let _ = action_sender.send(ServerAction::Connect(action.clone())).await;
+		let _ = server_action.send(ServerAction::Connect(action.clone())).await;
 		
 		let mut client = Client::new(action.clone());
 		
@@ -91,6 +91,7 @@ impl Client {
 						Packet::PlayerUUID(s) => client.player.uuid = s,
 						PlayerHp{..} | PlayerMana{..} | PlayerBuff{..} => client.player.status.init(packet)?,
 						PlayerInventorySlot{..} => client.player.inventory.update_slot(packet)?, //TODO: Impl config flag to have server-side managed inventory (e.g. drop this packet)
+						WorldDataRequest => server_action.send(ServerAction::GetWorldData()).await?,
 						_ => warn!("Unimplemented Packet"), 
 					}
 				}else{ continue; }
@@ -103,22 +104,26 @@ impl Client {
 	}
 }
 
+#[derive(Debug)]
 enum ServerAction {
 	Connect(mpsc::Sender<Arc<ClientAction>>), // Connect client thread to server action thread
 	SendToClient(u8, Packet), // Send to specific client
 	Broadcast(Packet), // Broadcast to all clients
 	
+	GetWorldData(),
 	Chat(String),
 }
 pub struct Server {
 	clients: Vec<mpsc::Sender<Arc<ClientAction>>>, // Channels to tell clients to send data
 	action: mpsc::Sender<ServerAction>,
 	action_receiver: mpsc::Receiver<ServerAction>,
-	world: World, // World Data Here
+	world: Arc<World>, // World Data Here
 	addr: String, // Addr to host server on
+	
+	//cache: Cache, // Cached Packets that can be updated and
 }
 impl Server {
-	pub fn new(world: World, addr: &str) -> Self {
+	pub fn new(world: Arc<World>, addr: &str) -> Self {
 		let (tx, rx) = mpsc::channel(100);
 		Server {
 			clients: Vec::with_capacity(8), // Typical, small server size
@@ -151,6 +156,9 @@ impl Server {
 							self.clients.remove(index.try_into().unwrap());
 						}
 					}
+				}
+				GetWorldData() => {
+					// Update and return cached WorldInfo packet
 				}
 				Chat(s) => info!("Received Chat {}", s),
 				//_ => warn!("Unimplemented Action")

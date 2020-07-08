@@ -10,7 +10,6 @@ use bytes::{BytesMut, BufMut, Bytes, Buf, buf::{BufExt, BufMutExt}};
 use crate::player::{self, Player, PlayerError};
 
 pub mod types;
-use types::NetworkText;
 
 #[derive(Error, Debug)]
 pub enum PacketError {
@@ -33,13 +32,13 @@ pub enum Packet {
 	
 	// Packets that are received only
 	ConnectRequest(String), // Client asks server if correct version
-	WorldDataRequest(),
+	WorldDataRequest,
 	PlayerUUID(String),
 	
 	// Packets that are sent out to individual clients
 	SetUserSlot(u8), // Tell client what to refer to themselves as (why is this a single byte???)
-	WorldInfo(), // Information about the world TODO: filter
-	Disconnect(NetworkText),
+	WorldInfo(types::WorldInfo), // Information about the world TODO: filter
+	Disconnect(types::NetworkText),
 	
 	// Packets that are received, (possibly modified) and then broadcast to all clients
 	PlayerAppearance(player::Appearance),
@@ -108,6 +107,7 @@ impl Decoder for PacketCodec {
 					net_id: reader.read_u16::<LittleEndian>()?,
 				}
 			}
+			6 => WorldDataRequest,
 			_ => Packet::Empty(),
 		};
 		println!("Finished Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());

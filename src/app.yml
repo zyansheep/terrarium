@@ -21,3 +21,19 @@ args:
         value_name: <PORT>
         help: Port to open to host server
         takes_value: true
+subcommands:
+    - convert:
+        about: Converts a vanilla format world to a terrarium format world
+        args:
+            - input:
+                help: The input file.
+                required: true
+                short: i
+                takes_value: true
+                value_name: INPUT FILE
+            - output:
+                help: The output file.
+                required: true
+                short: o
+                takes_value: true
+                value_name: OUTPUT FILE

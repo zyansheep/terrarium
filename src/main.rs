@@ -7,15 +7,14 @@ extern crate env_logger;
 use clap::App;
 use log::LevelFilter;
 use env_logger::Builder;
+use terrarium_world::World;
+use std::fs::File;
+use log::{info};
 
 // Config loading & saving
 
 mod config;
 use config::Config;
-
-// World module
-mod world;
-use world::World;
 
 mod packet;
 mod player;
@@ -33,10 +32,27 @@ async fn main() {
 	
 	let yaml_args = load_yaml!("app.yml");
 	let matches = App::from_yaml(yaml_args).get_matches();
+	
+	if let Some(matches) = matches.subcommand_matches("convert") {
+		// TODO: progress bars
+		let input_file = matches.value_of("input").expect("Please specify input file with --input or -i");
+		let output_file = matches.value_of("output").expect("Please specify output file with --output or -o");
+		
+		let mut input = File::open(input_file).expect(&format!("Unable to read input file: {}", input_file)[..]);
+		info!("Reading Vanilla World: {}", input_file);
+		let world = World::read_vanilla(&mut input).expect("Failed to parse vanilla world");
+		
+		let mut output = File::create(output_file).expect(&format!("Unable to create output file: {}. Are the permissions wrong?", output_file));
+		info!("Writing Terraria World: {}", output_file);	
+		world.write(&mut output).expect("Failed to Output Wirkd");
+		
+		info!("Finished!");
+		return ();
+	}
 
 	use std::path::Path;
 	
-	let mut config = Config::new("127.0.0.1", 7777, "world.wld"); // Default port 7777, default world file name "world.wld" (in CWD)
+	let mut config = Config::new("127.0.0.1", 7777, "world.twld"); // Default port 7777, default world file name "world.wld" (in CWD)
 
 	// if config file path passed, use that
 	let mut config_path = Path::new("config.yml"); // Otherwise, use config.yml in current directory if exists
@@ -60,12 +76,16 @@ async fn main() {
 	//println!("{:#?}", config);
 
 	// Read world file
-	let world = World::read_from_file(&config.world).expect("Could not parse world");
-	//println!("{:?}", world);
-	// Write world file
-	//world.write_to_file("write_test.wld").unwrap();
+	let mut world_file = File::open(&config.world).expect("Could not find terrarium world file");
+
+	info!("Loading World: {}", config.world);
+	use std::sync::Arc;
+	let world = Arc::new(World::read(&mut world_file).expect("Could not read world"));
 	
-	let server = Server::new(world, &config.get_address());
+	let server = Server::new(world.clone(), &config.get_address());
 	
-	server.start().await.unwrap(); // Run Server
+	// TODO: SIGINT/SIGTERM catching to gracefullly shutdown server (and save world)
+	let _result = server.start().await; // Run Server
+	
+	world.write(&mut world_file).expect("Failed to save world");
 }
