@@ -1,0 +1,6 @@
+[submodule "terrarium-world"]
+	path = terrarium-world
+	url = https://github.com/zyansheep/terrarium-world
+[submodule "submodules/world"]
+	path = submodules/world
+	url = https://github.com/zyansheep/terrarium-world
