@@ -2,12 +2,14 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 use std::io;
+use std::sync::Arc;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use variant_encoding::{VarStringReader, VarIntReader, VarIntWriter};
 use tokio_util::codec::{Decoder, Encoder};
 use bytes::{BytesMut, BufMut, Bytes, Buf, buf::{BufExt, BufMutExt}};
 
 use crate::player::{self, Player, PlayerError};
+use crate::server::cache::Cache;
 
 pub mod types;
 
@@ -26,7 +28,7 @@ pub enum PacketError {
 }
 
 //File that reads terraria's packets into nice little structures
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum Packet {
 	Empty(), // Default value
 	
@@ -37,7 +39,7 @@ pub enum Packet {
 	
 	// Packets that are sent out to individual clients
 	SetUserSlot(u8), // Tell client what to refer to themselves as (why is this a single byte???)
-	WorldInfo(types::WorldInfo), // Information about the world TODO: filter
+	WorldInfo(Arc<Cache>), // Information about the world TODO: filter
 	Disconnect(types::NetworkText),
 	
 	// Packets that are received, (possibly modified) and then broadcast to all clients
@@ -113,7 +115,7 @@ impl Decoder for PacketCodec {
 		println!("Finished Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
 		//println!("Finished Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
 		
-		if packet == Packet::Empty() { return Err(PacketError::UnknownType(msg_type)) }
+		if std::mem::discriminant(&packet) == std::mem::discriminant(&Packet::Empty()) { return Err(PacketError::UnknownType(msg_type)) }
 		Ok(Some(packet))
 	}
 }

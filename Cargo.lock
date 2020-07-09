@@ -74,9 +74,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.57"
+version = "1.0.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fde55d2a2bfaa4c9668bbc63f531fbdeee3ffe188f4662511ce2c22b3eedebe"
+checksum = "f9a06fb2e53271d7c279ec1efea6ab691c35a2ae67ec0d91d7acec0caf13b518"
 
 [[package]]
 name = "cfg-if"
@@ -315,9 +315,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.71"
+version = "0.2.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9457b06509d27052635f90d6466700c65095fdf75409b3fbdd903e988b886f49"
+checksum = "a9f8082297d534141b30c8d39e9b1773713ab50fdbe4ff30f750d063b3bfd701"
 
 [[package]]
 name = "linked-hash-map"
@@ -663,33 +663,21 @@ dependencies = [
 name = "terrarium"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "bitflags",
  "byteorder",
  "bytes",
  "clap",
  "env_logger",
+ "flate2",
  "futures",
  "futures-sink",
  "log",
  "serde",
  "serde_yaml",
- "terrarium_world",
  "thiserror",
  "tokio",
  "tokio-util",
- "variant-encoding",
-]
-
-[[package]]
-name = "terrarium_world"
-version = "0.1.0"
-source = "git+https://github.com/zyansheep/terrarium-world#ab9802259299169c08d9e72f281fbe3ec5329575"
-dependencies = [
- "bincode",
- "byteorder",
- "clap",
- "flate2",
- "serde",
  "variant-encoding",
 ]
 

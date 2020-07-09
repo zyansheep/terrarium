@@ -11,9 +11,14 @@ use tokio_util::codec::{FramedRead, FramedWrite};
 use tokio::stream::{self, StreamExt};
 use futures::sink::SinkExt;
 
+
+pub mod cache;
+use cache::Cache;
+
 use crate::packet::{Packet, PacketCodec, PacketError, types::NetworkText};
-use terrarium_world::World;
+use crate::world::World;
 use crate::player::Player;
+
 
 #[derive(Debug)]
 enum ClientAction {
@@ -119,8 +124,7 @@ pub struct Server {
 	action_receiver: mpsc::Receiver<ServerAction>,
 	world: Arc<World>, // World Data Here
 	addr: String, // Addr to host server on
-	
-	//cache: Cache, // Cached Packets that can be updated and
+	cache: Cache, // Cached Packets that can be updated and
 }
 impl Server {
 	pub fn new(world: Arc<World>, addr: &str) -> Self {
@@ -131,6 +135,7 @@ impl Server {
 			action_receiver: rx,
 			world: world,
 			addr: addr.into(),
+			cache: Cache::default(),
 		}
 	}
 	async fn action_handler(&mut self) {

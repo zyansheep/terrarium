@@ -7,7 +7,6 @@ extern crate env_logger;
 use clap::App;
 use log::LevelFilter;
 use env_logger::Builder;
-use terrarium_world::World;
 use std::fs::File;
 use log::{info};
 
@@ -16,13 +15,13 @@ use log::{info};
 mod config;
 use config::Config;
 
-mod packet;
+mod world;
+use world::World;
+
 mod player;
-
-mod errors;
-
+mod packet;
 mod server;
-use server::Server;
+use server::*;
 
 #[tokio::main]
 async fn main() {
@@ -40,7 +39,7 @@ async fn main() {
 		
 		let mut input = File::open(input_file).expect(&format!("Unable to read input file: {}", input_file)[..]);
 		info!("Reading Vanilla World: {}", input_file);
-		let world = World::read_vanilla(&mut input).expect("Failed to parse vanilla world");
+		let world = world::vanilla::read(&mut input).expect("Failed to parse vanilla world");
 		
 		let mut output = File::create(output_file).expect(&format!("Unable to create output file: {}. Are the permissions wrong?", output_file));
 		info!("Writing Terraria World: {}", output_file);	
