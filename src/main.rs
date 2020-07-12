@@ -26,7 +26,7 @@ use server::*;
 #[tokio::main]
 async fn main() {
 	let mut builder = Builder::new();
-    builder.filter_level(LevelFilter::Trace);
+    builder.filter_level(LevelFilter::Debug);
 	builder.init();
 	
 	let yaml_args = load_yaml!("app.yml");

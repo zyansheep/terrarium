@@ -1,19 +1,18 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+use log::{trace, debug, info, warn, error};
 use std::error::Error;
 use std::sync::Arc;
-use log::{trace, debug, info, warn, error};
 
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc;
-use tokio_util::codec::{FramedRead, FramedWrite};
+use tokio::sync::{mpsc, RwLock};
 use tokio::stream::{self, StreamExt};
+use tokio_util::codec::{FramedRead, FramedWrite};
 use futures::sink::SinkExt;
 
-
 pub mod cache;
-use cache::Cache;
+//use cache::{Cache, CacheCommand};
 
 use crate::packet::{Packet, PacketCodec, PacketError, types::NetworkText};
 use crate::world::World;
@@ -21,39 +20,32 @@ use crate::player::Player;
 
 
 #[derive(Debug)]
-enum ClientAction {
+pub enum ClientAction {
 	SendPacket(Packet),
-	ReceiveChat { chat: String },
+	SendWorldInfo(Arc<RwLock<cache::WorldInfo>>), 
 }
+pub type ClientActionSender = mpsc::Sender<Arc<ClientAction>>;
 struct Client {
 	id: u8, // What the client thinks its index is
 	player: Player,
-	action: mpsc::Sender<Arc<ClientAction>>,
+	action: ClientActionSender,
 }
 impl Client {
-	fn new(action: mpsc::Sender<Arc<ClientAction>>) -> Self {
-		Client {
+	fn new() -> (Self, mpsc::Receiver<Arc<ClientAction>>) {
+		let (action, action_receiver) = mpsc::channel(100);
+		(Client {
 			id: 0,
 			player: Player::default(),
 			action,
-		}
+		}, action_receiver)
 	}
 	async fn send_packet(&mut self, packet: Packet) -> Result< (), mpsc::error::SendError<Arc<ClientAction>> > {
 		self.action.send( Arc::new(ClientAction::SendPacket(packet)) ).await
 	}
-	async fn handle_new(socket: TcpStream, mut server_action: mpsc::Sender<ServerAction>) -> Result<Client, Box<dyn Error>> {
-		info!(target: "client_handle", "New Client Connected {:?}", socket);
-		
+	async fn handle(&mut self, socket: TcpStream, mut server_action: mpsc::Sender<ServerAction>, mut action_receiver: mpsc::Receiver<Arc<ClientAction>>) -> Result<(), Box<dyn Error>> {
 		let (reader, writer) = tokio::io::split(socket);
 		
-		// Send clientaction chanel to server
-		let (action, mut action_receiver) = mpsc::channel(100);
-		let _ = server_action.send(ServerAction::Connect(action.clone())).await;
-		
-		let mut client = Client::new(action.clone());
-		
 		// Broadcast thread
-
 		tokio::spawn(async move {
 			let mut packet_writer = FramedWrite::new(writer, PacketCodec::default());
 			loop {
@@ -63,7 +55,11 @@ impl Client {
 					let result = match &*action {
 						SendPacket(packet) => packet_writer.send(&packet).await,
 						//ReceiveChat{ ref chat } => println!("Sending Chat: \"{}\"", chat),
-						_ => Ok(warn!("Unimplemented ClientAction Received: {:?}", action)),
+						SendWorldInfo(info_rwlock) => {
+							let info = &*info_rwlock.read().await; // Await for read lock
+							packet_writer.send(&Packet::WorldInfo(info.clone())).await // If aquired read lock, send to packet writer
+						}
+						//_ => Ok(warn!("Unimplemented ClientAction Received: {:?}", action)),
 					};
 					if let Err(_) = result {
 						error!("Error with parsing ClientAction, Disconnecting"); break;
@@ -81,22 +77,26 @@ impl Client {
 			
 			if let Ok(packet_or_none) = result {
 				if let Some(packet) = packet_or_none { // Check if packet was read
-					info!("Decoded Packet: {:?}", packet);
+					debug!("Decoded Packet: {:?}", packet);
 					
 					use Packet::*;
 					match packet {
 						Packet::ConnectRequest(s) => {
 							if s == "Terraria230"{
-								client.send_packet(Packet::SetUserSlot(0)).await? // Every client is always in user slot 0 (other players are dynamically set up to 256 user slots)
+								self.send_packet(Packet::SetUserSlot(0)).await? // Every client is always in user slot 0 (other players are dynamically set up to 256 user slots)
 							} else {
-								client.send_packet(Packet::Disconnect(NetworkText::new("Wrong Version! Need Terraria 1.4.0.5"))).await?
+								self.send_packet(Packet::Disconnect(NetworkText::new("LegacyMultiplayer.4"))).await? // Send "Wrong Version" prompt
 							}
 						},
-						Packet::PlayerAppearance(appearance) => client.player.appearance.init(appearance)?,
-						Packet::PlayerUUID(s) => client.player.uuid = s,
-						PlayerHp{..} | PlayerMana{..} | PlayerBuff{..} => client.player.status.init(packet)?,
-						PlayerInventorySlot{..} => client.player.inventory.update_slot(packet)?, //TODO: Impl config flag to have server-side managed inventory (e.g. drop this packet)
-						WorldDataRequest => server_action.send(ServerAction::GetWorldData()).await?,
+						Packet::PlayerAppearance(appearance) => self.player.appearance.init(appearance)?,
+						Packet::PlayerUUID(s) => self.player.uuid = s,
+						PlayerHp{..} | PlayerMana{..} | PlayerBuff{..} => self.player.status.init(packet)?,
+						PlayerInventorySlot{..} => self.player.inventory.update_slot(packet)?, //TODO: Impl config flag to have server-side managed inventory (e.g. drop this packet)
+						WorldDataRequest => server_action.send(ServerAction::GetWorldData(self.action.clone())).await?,
+						EssentialTilesRequest(x, y) => {
+							self.send_packet(Packet::Status(15, NetworkText::new("LegacyInterface.44"), 0)).await?;
+							//self.send_packet(Packet::Chunk())
+						}
 						_ => warn!("Unimplemented Packet"), 
 					}
 				}else{ continue; }
@@ -105,47 +105,50 @@ impl Client {
 				break;
 			}
 		}
-		Ok(client)
+		Ok(())
 	}
 }
 
 #[derive(Debug)]
-enum ServerAction {
-	Connect(mpsc::Sender<Arc<ClientAction>>), // Connect client thread to server action thread
+pub enum ServerAction {
+	ConnectClient(ClientActionSender), // Connect client thread to server action thread
 	SendToClient(u8, Packet), // Send to specific client
 	Broadcast(Packet), // Broadcast to all clients
 	
-	GetWorldData(),
+	GetWorldData(ClientActionSender),
 	Chat(String),
 }
 pub struct Server {
-	clients: Vec<mpsc::Sender<Arc<ClientAction>>>, // Channels to tell clients to send data
+	clients: Vec<ClientActionSender>, // Channels to tell clients to send data
 	action: mpsc::Sender<ServerAction>,
 	action_receiver: mpsc::Receiver<ServerAction>,
 	world: Arc<World>, // World Data Here
 	addr: String, // Addr to host server on
-	cache: Cache, // Cached Packets that can be updated and
+	//cache_updater: mpsc::Sender<CacheCommand>,
 }
 impl Server {
 	pub fn new(world: Arc<World>, addr: &str) -> Self {
 		let (tx, rx) = mpsc::channel(100);
+		//let (cache, updater) = Cache::new(world.clone());
 		Server {
 			clients: Vec::with_capacity(8), // Typical, small server size
 			action: tx,
 			action_receiver: rx,
 			world: world,
 			addr: addr.into(),
-			cache: Cache::default(),
+			//cache_updater: updater
 		}
 	}
-	async fn action_handler(&mut self) {
+	async fn action_handler(&mut self) -> Result<(), Box<dyn Error>> {
+		//self.cache_updater.send(cache::CacheCommand::UpdateWorldInfo).await?;
+		
 		loop {
 			let action = self.action_receiver.recv().await.unwrap();
 			
 			use ServerAction::*;
 			use std::convert::TryInto;
 			match action {
-				Connect(chan) => {
+				ConnectClient(chan) => {
 					self.clients.push(chan);
 				},
 				SendToClient(index, packet) => {
@@ -161,10 +164,13 @@ impl Server {
 							self.clients.remove(index.try_into().unwrap());
 						}
 					}
-				}
-				GetWorldData() => {
-					// Update and return cached WorldInfo packet
-				}
+				},
+				GetWorldData(mut action_sender) => {
+					info!("Received GetWorldData Command");
+					let packet = Packet::WorldInfo( cache::WorldInfo::new(self.world.clone())? );
+					info!("GetWorldData: {:?}", packet);
+					let _ = action_sender.send( Arc::new(ClientAction::SendPacket(packet)) ).await;
+				},
 				Chat(s) => info!("Received Chat {}", s),
 				//_ => warn!("Unimplemented Action")
 			}
@@ -176,25 +182,38 @@ impl Server {
 		info!("Starting Terraria Server on {}", &self.addr);
 		
 		// Channel to send actions from client thread to server thread
-		let sa_channel = self.action.clone();
+		let mut sa_channel = self.action.clone();
 		// Action handler that listens on channel (so players can update world)
 		tokio::spawn(async move {
-			let _ = self.action_handler().await;
+			let result = self.action_handler().await;
+			match result {
+				Err(err) => error!("Server Thread Exited with error: {:?}", err),
+				Ok(_) => info!("Server Thread Exited Normally"),
+			}
 		});
 		
 		loop {
 			let (socket, _) = listener.accept().await?; // Wait for new connection (or return Err)
 			
 			let sa_tx_copy = sa_channel.clone();
+			
+			let (mut client, action_receiver) = Client::new();
+			if let Err(err) = sa_channel.send(ServerAction::ConnectClient(client.action.clone())).await {
+				error!("Server Closed: {:?}", err.to_string());
+				break;
+			}
+			
 			tokio::spawn(async move {
 				// Create new client object 
 				// Initialize Reader and Sender thread
-				let result = Client::handle_new(socket, sa_tx_copy).await; // TODO: Log client errors...
+				info!(target: "client_thread", "New Client Connected {:?}", socket);
+				let result = client.handle(socket, sa_tx_copy, action_receiver).await; // TODO: Log client errors...
 				match result {
 					Err(error) => warn!("Client Error: {}", error),
-					Ok(client) => info!("Client Disconnected {}", client.player.appearance.name),
+					Ok(_) => info!("Client Disconnected"),
 				}
 			});
 		}
+		Ok(())
 	}
 }

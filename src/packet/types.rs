@@ -36,7 +36,7 @@ impl NetworkText {
 		Ok(())
 	}
 }
-#[derive(Debug, PartialEq)]
+/*#[derive(Debug, PartialEq)]
 pub struct WorldInfo {
 	time: i32,
 	moon_info: u8,
@@ -79,4 +79,4 @@ pub struct WorldInfo {
 	underworld_bg_style: u8,
 
 	tree_tops: [u8; 13],
-}
+}*/

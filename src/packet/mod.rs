@@ -3,15 +3,18 @@
 #![allow(unused_imports)]
 use std::io;
 use std::sync::Arc;
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use variant_encoding::{VarStringReader, VarIntReader, VarIntWriter};
+use tokio::sync::RwLockReadGuard;
 use tokio_util::codec::{Decoder, Encoder};
 use bytes::{BytesMut, BufMut, Bytes, Buf, buf::{BufExt, BufMutExt}};
 
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use variant_encoding::{VarStringReader, VarIntReader, VarIntWriter};
+
 use crate::player::{self, Player, PlayerError};
-use crate::server::cache::Cache;
+use crate::server::cache::{WorldInfo};
 
 pub mod types;
+use types::*;
 
 #[derive(Error, Debug)]
 pub enum PacketError {
@@ -35,12 +38,14 @@ pub enum Packet {
 	// Packets that are received only
 	ConnectRequest(String), // Client asks server if correct version
 	WorldDataRequest,
+	EssentialTilesRequest(i32, i32),
 	PlayerUUID(String),
 	
 	// Packets that are sent out to individual clients
 	SetUserSlot(u8), // Tell client what to refer to themselves as (why is this a single byte???)
-	WorldInfo(Arc<Cache>), // Information about the world TODO: filter
-	Disconnect(types::NetworkText),
+	WorldInfo(WorldInfo), // Information about the world TODO: filter
+	Disconnect(NetworkText),
+	Status(i32, NetworkText, u8),
 	
 	// Packets that are received, (possibly modified) and then broadcast to all clients
 	PlayerAppearance(player::Appearance),
@@ -57,18 +62,20 @@ impl Decoder for PacketCodec {
 	type Error = PacketError;
 	fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
 		if src.remaining() == 0 { return Ok(None) } // No data to read
-		println!("Started Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
+		//println!("Started Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
 		
 		let bytes_left = src.remaining();
 		let size = src.get_u16_le() as usize; //First 2 bytes are size (sometimes?) TODO: figure this out
 		// NetMessage.cs only errors when bytes_left is less than read size
 		if size > bytes_left { return Err(PacketError::InvalidSize{told: size, found: bytes_left}) } // Error: packet size doesn't match what packet says its size should be
-
-		println!("Bytes Left: {}", src.remaining());
+		
+		log::debug!("Read Bytes: {:02x?}", &src.bytes()[0..size-2]);
+		
+		//println!("Bytes Left: {}", src.remaining());
 		let mut reader = src.reader();
 		
 		let msg_type = reader.read_u8()?;
-		println!("Recevied Packet Type: {}", msg_type);
+		//println!("Recevied Packet Type: {}", msg_type);
 
 		use Packet::*;
 		let packet = match msg_type {
@@ -110,9 +117,13 @@ impl Decoder for PacketCodec {
 				}
 			}
 			6 => WorldDataRequest,
+			8 => EssentialTilesRequest(
+				reader.read_i32::<LittleEndian>()?,
+				reader.read_i32::<LittleEndian>()?,
+			),
 			_ => Packet::Empty(),
 		};
-		println!("Finished Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
+		//println!("Finished Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
 		//println!("Finished Reading Packet: Bytes: {:?}, Size: {:?}", src.bytes(), src.remaining());
 		
 		if std::mem::discriminant(&packet) == std::mem::discriminant(&Packet::Empty()) { return Err(PacketError::UnknownType(msg_type)) }
@@ -127,21 +138,34 @@ impl Encoder<&Packet> for PacketCodec {
 		use Packet::*;
 		match item {
 			SetUserSlot(id) => {
-				writer.write_u8(4)?;
-				writer.write_u8(0)?;
+				writer.write_u16::<LittleEndian>(4)?;
 				writer.write_u8(3)?; // Set User Slot Packet ID = 3
 				writer.write_u8(*id)?; // Write ID
 			},
-			Disconnect(text) => {
-				text.write(&mut writer)?;
-				dst.put_u8(writer.len() as u8);
-				dst.put_u8(0);
+			Disconnect(localized_text) => {
+				localized_text.write(&mut writer)?;
+				dst.put_u16_le(writer.len() as u16 + 2);
+			}
+			WorldInfo(info) => { // Receives locked reader (managed by calling function)
+				writer.write_u16::<LittleEndian>(info.data.len() as u16 + 3)?;
+				writer.write_u8(7)?; // Packet ID
+				use std::io::Write;
+				writer.write(&info.data[..])?;
+				//println!("Data Length: {}", writer.len());
+				//println!("Data Hex: {:02X?}", &writer[..]);
+			}
+			Status(max, localized_text, flags) => {
+				writer.write_i32::<LittleEndian>(*max)?;
+				localized_text.write(&mut writer)?;
+				writer.write_u8(*flags)?;
+				
+				dst.put_u16_le(writer.len() as u16 + 2);
 			}
 			_ => return Err(PacketError::Unimplemented),
 		};
 		
 		dst.put_slice(&writer[..]); // flush writer to destination
-		println!("Finished Writing Packet: Bytes Left: {:?}, Data: {:?}", dst.remaining_mut(), dst.bytes());
+		log::debug!("Write Bytes: {:02x?}", dst.bytes());
 		Ok(())
 	}
 }
