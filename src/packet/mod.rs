@@ -10,8 +10,8 @@ use bytes::{BytesMut, BufMut, Bytes, Buf, buf::{BufExt, BufMutExt}};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use variant_encoding::{VarStringReader, VarIntReader, VarIntWriter};
 
+use arc_swap::ArcSwap;
 use crate::player::{self, Player, PlayerError};
-use crate::server::cache::{WorldInfo};
 
 pub mod types;
 use types::*;
@@ -43,8 +43,9 @@ pub enum Packet {
 	
 	// Packets that are sent out to individual clients
 	SetUserSlot(u8), // Tell client what to refer to themselves as (why is this a single byte???)
-	WorldInfo(WorldInfo), // Information about the world TODO: filter
 	Disconnect(NetworkText),
+	WorldInfo(ArcSwap<Vec<u8>>), // Information about the world TODO: filter
+	WorldChunk(ArcSwap<Vec<u8>>),
 	Status(i32, NetworkText, u8),
 	
 	// Packets that are received, (possibly modified) and then broadcast to all clients
@@ -147,10 +148,11 @@ impl Encoder<&Packet> for PacketCodec {
 				dst.put_u16_le(writer.len() as u16 + 2);
 			}
 			WorldInfo(info) => { // Receives locked reader (managed by calling function)
-				writer.write_u16::<LittleEndian>(info.data.len() as u16 + 3)?;
+				let arc = info.load();
+				writer.write_u16::<LittleEndian>(arc.len() as u16 + 3)?;
 				writer.write_u8(7)?; // Packet ID
 				use std::io::Write;
-				writer.write(&info.data[..])?;
+				writer.write(&arc[..])?;
 				//println!("Data Length: {}", writer.len());
 				//println!("Data Hex: {:02X?}", &writer[..]);
 			}

@@ -7,6 +7,8 @@ use std::io;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use variant_encoding::{VarStringReader, VarStringWriter};
 
+use crate::world::TileCoord;
+
 #[derive(Error, Debug)]
 pub enum PlayerError {
 	#[error("Error Reading / Writing Packet Data")]
@@ -228,6 +230,7 @@ impl Status {
 pub struct Player {
 	pub id: u8,
 	pub uuid: String, // uuid of the player TODO: what is this used for?
+	pub position: TileCoord,
 	
 	pub status: Status, // Holds hp, mana, buffs etc.
 	pub inventory: Inventory, // Whats in your inventory?

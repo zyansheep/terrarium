@@ -7,8 +7,9 @@ extern crate env_logger;
 use clap::App;
 use log::LevelFilter;
 use env_logger::Builder;
-use std::fs::File;
-use log::{info};
+use std::{sync::Arc, fs::File};
+use tokio::sync::Mutex;
+use log::{info, error};
 
 // Config loading & saving
 
@@ -78,13 +79,16 @@ async fn main() {
 	let mut world_file = File::open(&config.world).expect("Could not find terrarium world file");
 
 	info!("Loading World: {}", config.world);
-	use std::sync::Arc;
-	let world = Arc::new(World::read(&mut world_file).expect("Could not read world"));
 	
-	let server = Server::new(world.clone(), &config.get_address());
+	let mut world = World::read(&mut world_file).expect("Could not read world");
+	let mut world = Arc::new(Mutex::new(world));
+	
+	let mut server = Server::new(&config.get_address());
+	let mut server = Arc::new(Mutex::new(server));
 	
 	// TODO: SIGINT/SIGTERM catching to gracefullly shutdown server (and save world)
-	let _result = server.start().await; // Run Server
+	let result = Server::serve(server.clone(), world.clone()).await; // Run Server
+	if let Err(err) = result { error!("Server Crashed: {:?}", err); }
 	
-	world.write(&mut world_file).expect("Failed to save world");
+	//world.write(&mut world_file).expect("Failed to save world");
 }
