@@ -11,7 +11,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use variant_encoding::{VarStringReader, VarIntReader, VarIntWriter};
 
 use arc_swap::ArcSwap;
-use crate::player::{self, Player, PlayerError};
+use crate::server::player::{self, Player, PlayerError};
 
 pub mod types;
 use types::*;

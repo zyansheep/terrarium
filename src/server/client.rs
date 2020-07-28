@@ -1,4 +1,4 @@
-
+#![allow(unused_imports)]
 use log::{trace, debug, info, warn, error};
 use std::error::Error;
 use std::sync::Arc;
@@ -8,28 +8,32 @@ use tokio::sync::{mpsc, RwLock, Mutex};
 use tokio::stream::{self, StreamExt};
 use tokio_util::codec::{FramedRead, FramedWrite};
 use futures::sink::SinkExt;
+use arc_swap::ArcSwap;
 
-use crate::packet::{Packet, PacketCodec, PacketError, types::NetworkText};
-
-use crate::world::ChunkActionSender;
-
-mod player;
-use player::Player;
-
+use crate::server::{
+	packet::{
+		Packet, PacketCodec, PacketError, 
+		types::{NetworkText}
+	},
+	ServerActionSender,
+	ServerAction,
+	player::Player,
+};
+use crate::world::*;
 
 #[derive(Debug)]
 pub enum ClientAction {
-	SendPacket(Packet), 
-	SetChunkHandler(ChunkActionSender)
+	SendPacket(Packet),
+	UpdateChunkHandler(ChunkActionSender)
 }
-pub type ClientActionSender = mpsc::Sender<Arc<ClientAction>>;
-struct Client {
-	id: usize, // What the client thinks its index is
-	player: Player,
-	action: ClientActionSender,
+pub type ClientActionSender = mpsc::Sender<ClientAction>;
+pub struct Client {
+	pub id: usize, // What the client thinks its index is
+	pub player: Player,
+	pub action: ClientActionSender,
 }
 impl Client {
-	fn new() -> (Self, mpsc::Receiver<Arc<ClientAction>>) {
+	pub fn new() -> (Self, mpsc::Receiver<ClientAction>) {
 		let (action, action_receiver) = mpsc::channel(100);
 		(Client {
 			id: 0,
@@ -37,19 +41,20 @@ impl Client {
 			action,
 		}, action_receiver)
 	}
-	async fn send_packet(&mut self, packet: Packet) -> Result< (), mpsc::error::SendError<Arc<ClientAction>> > {
-		self.action.send( Arc::new(ClientAction::SendPacket(packet)) ).await
+	async fn send_packet(&mut self, packet: Packet) -> Result< (), mpsc::error::SendError<ClientAction> > {
+		self.action.send( ClientAction::SendPacket(packet) ).await
 	}
-	async fn handle(
+	pub async fn handle(
 		&mut self, 
 		socket: TcpStream, 
-		mut action_receiver: mpsc::Receiver<Arc<ClientAction>>, 
+		mut action_receiver: mpsc::Receiver<ClientAction>, 
 		mut server_action: ServerActionSender, 
 		mut world_action: WorldActionSender,
-		mut chunk_action: ChunkActionSender) -> Result<(), Box<dyn Error>> {
+		chunk_action: Arc<Mutex<ChunkActionSender>>) -> Result<(), Box<dyn Error>> {
 		
 		let (reader, writer) = tokio::io::split(socket);
 		
+		let chunk_action_updater = chunk_action.clone();
 		// Broadcast thread
 		tokio::spawn(async move {
 			let mut packet_writer = FramedWrite::new(writer, PacketCodec::default());
@@ -57,15 +62,16 @@ impl Client {
 				if let Some(action) = action_receiver.recv().await {
 					use ClientAction::*;
 					debug!("Sending ClientAction: {:?}", action);
-					let result = match &*action {
+					let result = match action { // Parse action
 						SendPacket(packet) => packet_writer.send(&packet).await,
-						SetChunkHandler(handle) => {
-							chunk_action = handle.clone();
+						UpdateChunkHandler(handle) => { // Update chunk arcswap if needed
+							let mut lock = chunk_action_updater.lock().await;
+							*lock = handle; // Set new handle
 							Ok(())
 						},
 					};
-					if let Err(_) = result {
-						error!("Error with parsing ClientAction, Disconnecting"); break;
+					if let Err(err) = result {
+						error!("Error with parsing ClientAction: {:?}", err); break;
 					}
 				} else {
 					break;
@@ -99,7 +105,8 @@ impl Client {
 						EssentialTilesRequest(x, y) => {
 							self.send_packet(Packet::Status(15, NetworkText::new("LegacyInterface.44"), 0)).await?;
 							// Request cached WorldInfo data from world
-							world_action.send(WorldAction::RequestChunkHandle(self.action.clone(), self.player.position) ).await?;
+							let mut lock = chunk_action.lock().await;
+							lock.send(ChunkAction::RequestSections(self.action.clone())).await?;
 						}
 						_ => warn!("Unimplemented Packet"), 
 					}

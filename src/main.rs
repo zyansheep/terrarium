@@ -19,8 +19,6 @@ use config::Config;
 mod world;
 use world::World;
 
-mod player;
-mod packet;
 mod server;
 use server::*;
 
