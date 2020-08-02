@@ -1,6 +1,7 @@
 #[macro_use] extern crate clap;
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate thiserror;
+#[macro_use] extern crate enum_primitive;
 extern crate log;
 extern crate env_logger;
 

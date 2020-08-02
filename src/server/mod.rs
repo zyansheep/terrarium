@@ -32,7 +32,6 @@ pub enum ServerAction {
 pub type ServerActionSender = mpsc::Sender<ServerAction>;
 pub struct Server {
 	clients: Vec<ClientActionSender>, // Channels to tell clients to send data
-	
 	addr: String, // Addr to host server on
 }
 impl Server {
@@ -42,7 +41,7 @@ impl Server {
 			addr: addr.into(),
 		}
 	}
-	async fn handle(&mut self, mut action_receiver: mpsc::Receiver<ServerAction>, mut world_action: WorldActionSender) -> Result<(), Box<dyn Error>> {
+	async fn handle(&mut self, mut action_receiver: mpsc::Receiver<ServerAction>) -> Result<(), Box<dyn Error>> {
 		loop {
 			let action = action_receiver.recv().await.unwrap();
 			
@@ -53,7 +52,7 @@ impl Server {
 					self.clients.push(chan);
 				},
 				Chat(s) => info!("Received Chat {}", s),
-				//_ => warn!("Unimplemented Action")
+				_ => warn!("Unimplemented Action")
 			}
 		}
 	}
@@ -83,7 +82,7 @@ impl Server {
 		let server_handle = server.clone();
 		tokio::spawn(async move {
 			let mut lock = server_handle.lock().await;
-			let result = lock.handle(server_receiver, w_tx).await;
+			let result = lock.handle(server_receiver).await;
 			match result {
 				Err(err) => error!("Server Thread Exited with error: {:?}", err),
 				Ok(_) => info!("Server Thread Exited Normally"),
@@ -102,7 +101,7 @@ impl Server {
 				break;
 			}
 			
-			wld_tx_copy.send(WorldAction::SpawnClient(client.action.clone()));
+			wld_tx_copy.send(WorldAction::SpawnClient(client.action.clone(), None));
 			let chunk_action = {
 				let recv_action = action_receiver.recv().await;
 				if let Some(action) = recv_action {
