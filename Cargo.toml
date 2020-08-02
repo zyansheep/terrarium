@@ -24,7 +24,7 @@ flate2 = "1.0.16"
 arc-swap = "0.4.7"
 rand = "0.7.3"
 quote = "1.0.7"
-rand_enum_derive = { path = "./rand_enum_derive" }
 num_enum = "0.5.0"
 enum_primitive = "0.1.1"
 num = "0.3.0"
+rand_enum_derive = { path = "./rand_enum_derive" }

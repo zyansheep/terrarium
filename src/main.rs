@@ -79,11 +79,11 @@ async fn main() {
 
 	info!("Loading World: {}", config.world);
 	
-	let mut world = World::read(&mut world_file).expect("Could not read world");
-	let mut world = Arc::new(Mutex::new(world));
+	let world = World::read(&mut world_file).expect("Could not read world");
+	let world = Arc::new(Mutex::new(world));
 	
-	let mut server = Server::new(&config.get_address());
-	let mut server = Arc::new(Mutex::new(server));
+	let server = Server::new(&config.get_address());
+	let server = Arc::new(Mutex::new(server));
 	
 	// TODO: SIGINT/SIGTERM catching to gracefullly shutdown server (and save world)
 	let result = Server::serve(server.clone(), world.clone()).await; // Run Server

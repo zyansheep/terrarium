@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #![allow(unused_imports)]
 
 use log::{trace, error, warn, debug};
@@ -182,8 +183,6 @@ impl World {
 		)));
 		let world_info: ArcSwap<Vec<u8>> = ArcSwap::new(Arc::new(Vec::new())); // Initialize World ArcSwap Cache
 		
-		let spawn_thread = chunks.get_mut(&spawn_chunk_coord);
-		
 		loop {
 			if let Some(action) = action_receiver.recv().await {
 				use WorldAction::*;
@@ -204,12 +203,13 @@ impl World {
 									Err(err) => { error!("Failed to get/create thread sender for chunk at {:?} err: {:?}", spawn_chunk_coord, err); continue; },
 								}
 							} else {
-								error!("Chunk is not loaded at {:?}", spawn_chunk_coord); // TODO: Load chunk if not loaded
+								// TODO: Load chunk if not loaded and send asyncronously
+								error!("Chunk is not loaded at {:?}", spawn_chunk_coord); 
 							}
 						} else { warn!("Client attempted to load chunk outside of world"); }
 					}
-					RequestWorldInfo(sender) => {
-						
+					RequestWorldInfo(mut sender) => {
+						sender.send(ClientAction::SendPacket(packet::Packet::WorldInfo(world_info.clone()))).await?;
 					},
 					// From Chunks
 					

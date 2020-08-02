@@ -1,8 +1,12 @@
 #![allow(unused_imports)]
+#![allow(dead_code)]
 
 use log::{trace, debug, info, warn, error};
-use std::error::Error;
-use std::sync::Arc;
+use std::{
+	error::Error,
+	sync::Arc,
+	collections::HashMap,
+}
 use arc_swap::ArcSwap;
 
 use tokio::net::{TcpListener, TcpStream};
@@ -23,21 +27,23 @@ pub use client::{Client, ClientAction, ClientActionSender};
 
 #[derive(Debug)]
 pub enum ServerAction {
-	ConnectClient(ClientActionSender), // Connect client thread to server action thread
-	DisconnectClient(ClientActionSender), //
+	ConnectClient(String, ClientActionSender), // Connect client thread to server action thread
+	DisconnectClient(String), // Disconnect client
 	Broadcast(Packet), // Broadcast to all clients
 	
 	Chat(String),
 }
 pub type ServerActionSender = mpsc::Sender<ServerAction>;
 pub struct Server {
-	clients: Vec<ClientActionSender>, // Channels to tell clients to send data
-	addr: String, // Addr to host server on
+	clients: HashMap<usize, ClientActionSender>, // Channels to tell clients to send data
+	names: HashMap<String, usize>,
+	addr: String, // Addr server is hosting on
 }
 impl Server {
 	pub fn new(addr: &str) -> Self {
 		Server {
-			clients: Vec::with_capacity(8), // Typical, small server size
+			clients: HashMap::with_capacity(8),
+			names: HashMap::with_capacity(8),
 			addr: addr.into(),
 		}
 	}
@@ -48,8 +54,14 @@ impl Server {
 			use ServerAction::*;
 			use std::convert::TryInto;
 			match action {
-				ConnectClient(chan) => {
-					self.clients.push(chan);
+				ConnectClient(name, chan) => {
+					let id = self.names.len()
+					chan.send(ClientAction::SetID(id)).await?;
+					self.names.insert(name, id);
+					self.clients.insert(name, chan);
+				},
+				DisconnectClient(name) => {
+					self.clients.remove(name);
 				},
 				Chat(s) => info!("Received Chat {}", s),
 				_ => warn!("Unimplemented Action")
@@ -77,7 +89,6 @@ impl Server {
 		
 		// Action handler that listens on channel (so players can update world)
 		let (server_action, server_receiver) = mpsc::channel(100);
-		let w_tx = world_action.clone();
 		
 		let server_handle = server.clone();
 		tokio::spawn(async move {
@@ -96,12 +107,13 @@ impl Server {
 			let mut wld_tx_copy = world_action.clone();
 			
 			let (mut client, mut action_receiver) = Client::new();
-			if let Err(err) = sa_tx_copy.send(ServerAction::ConnectClient(client.action.clone())).await {
+			/*if let Err(err) = sa_tx_copy.send(ServerAction::ConnectClient(client.action.clone())).await {
 				error!("Server Closed: {:?}", err.to_string());
 				break;
-			}
+			}*/
 			
-			wld_tx_copy.send(WorldAction::SpawnClient(client.action.clone(), None));
+			//wld_tx_copy.send(WorldAction::SpawnClient(client.action.clone(), None));
+			
 			let chunk_action = {
 				let recv_action = action_receiver.recv().await;
 				if let Some(action) = recv_action {

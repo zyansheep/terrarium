@@ -86,8 +86,8 @@ pub fn read(reader: &mut impl Read) -> Result<World, Box<dyn Error>> {
 		_ => WorldMode::Normal,
 	};
 
-	reader.read_u8()? != 0; // Is Drunk? (has seed "05162020")
-	reader.read_u8()? != 0; // Has seed "for the worthy"
+	reader.read_u8()?; // Is Drunk? (has seed "05162020")
+	reader.read_u8()?; // Has seed "for the worthy"
 
 	reader.read_u64::<LittleEndian>()?; // Creation time.
 

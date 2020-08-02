@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use log::{trace, error};
 use std::{io::{self, Read, Write}, error::Error, sync::Arc};
 use serde::{Serialize, Deserialize};
@@ -40,7 +42,7 @@ impl Chunk {
 	pub fn test_chunk(chunk_size: u16) -> Chunk {
 		let mut chunk = Chunk::default();
 		chunk.tiles.reserve_exact( chunk_size as usize * chunk_size as usize);
-		for y in 0..chunk_size {
+		for _ in 0..chunk_size {
 			for x in 0..chunk_size {
 				if x > chunk_size-3 {
 					chunk.tiles.push(Tile::new(Block::new(0)));
@@ -74,6 +76,7 @@ pub enum ChunkAction {
 	RequestSections(ClientActionSender), // Send cached chunk packets to client
 	
 	ModifyBlock(ClientActionSender, TileCoord),
+	ForceCloseThread(),
 }
 pub type ChunkActionSender = mpsc::Sender<ChunkAction>;
 
@@ -95,16 +98,16 @@ impl ChunkThread {
 			if let Some(action) = result {
 				use ChunkAction::*;
 				match action {
-					RequestSections(sender) => {
+					RequestSections(_sender) => {
 						// Send cached chunk data to client (generate if needed)
 					},
 					AssignChunk(chunk_lock) => { // Assigns a loaded chunk to this Chunk Thread (managed by World thread)
 						self.chunks.push(chunk_lock);
 					},
-					ModifyBlock(sender, tile_coord) => {
+					ModifyBlock(_sender, _tile_coord) => {
 						
 					},
-					ForceCloseThread => break,
+					ForceCloseThread() => break,
 				}
 			}
 		}

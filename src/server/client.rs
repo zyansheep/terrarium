@@ -1,4 +1,6 @@
 #![allow(unused_imports)]
+#![allow(dead_code)]
+
 use log::{trace, debug, info, warn, error};
 use std::error::Error;
 use std::sync::Arc;
@@ -102,7 +104,7 @@ impl Client {
 						PlayerHp{..} | PlayerMana{..} | PlayerBuff{..} => self.player.status.init(packet)?,
 						PlayerInventorySlot{..} => self.player.inventory.update_slot(packet)?, //TODO: Impl config flag to have server-side managed inventory (e.g. drop this packet)
 						WorldDataRequest => world_action.send(WorldAction::RequestWorldInfo(self.action.clone())).await?, // Sends request to world thread to return cached worldinfo struct
-						EssentialTilesRequest(x, y) => {
+						EssentialTilesRequest(_x, _y) => {
 							self.send_packet(Packet::Status(15, NetworkText::new("LegacyInterface.44"), 0)).await?;
 							// Request cached WorldInfo data from world
 							let mut lock = chunk_action.lock().await;
@@ -116,6 +118,7 @@ impl Client {
 				break;
 			}
 		}
+		server_action.send(ServerAction::DisconnectClient(self.id));
 		Ok(())
 	}
 }

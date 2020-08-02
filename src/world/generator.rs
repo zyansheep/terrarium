@@ -40,12 +40,13 @@ impl<R: Rng> WorldGenerator for NormalGen<R> {
 			adamantite_tier: rng.gen(),
 		}
 	}
-	fn generate(&mut self, seed: u64) -> Vec<Chunk> {
+	fn generate(&mut self, _seed: u64) -> Vec<Chunk> {
 		Vec::with_capacity(3)
 	}
 }
 impl<R: Rng> NormalGen<R> {
 	pub fn new(world_size: WorldSize, mut rng: R, corruption_type: Option<CorruptionType>) -> NormalGen<R> {
+		use WorldSize::*;
 		NormalGen {
 			size: match world_size {
 				Small => TileCoord {x: 4200, y: 1200},
@@ -55,7 +56,7 @@ impl<R: Rng> NormalGen<R> {
 			corruption_type: {
 				if let Some(c_type) = corruption_type { c_type } else { rng.gen() }
 			},
-			rng: rng,
+			rng,
 		}
 	}
 }
