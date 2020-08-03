@@ -49,7 +49,7 @@ pub enum Packet {
 	Status(i32, NetworkText, u8),
 	
 	// Packets that are received, (possibly modified) and then broadcast to all clients
-	PlayerAppearance(player::Appearance),
+	PlayerInfo(String, player::Appearance),
 	PlayerHp{hp: u16, max_hp: u16},
 	PlayerMana{mana: u16, max_mana: u16},
 	PlayerBuff{buffs: [u16; 22]},
@@ -83,7 +83,8 @@ impl Decoder for PacketCodec {
 			1 => ConnectRequest(reader.read_varstring()?),
 			4 => {
 				reader.read_u8()?; // Read Player ID
-				PlayerAppearance(player::Appearance::read(&mut reader)?)
+				let tuple = player::Player::read_playerinfo(&mut reader)?;
+				PlayerInfo(tuple.0, tuple.1)
 			}, // Construct player struct
 			68 => PlayerUUID(reader.read_varstring()?),
 			16 => { // Player Health

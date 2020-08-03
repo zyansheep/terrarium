@@ -130,8 +130,6 @@ impl Inventory {
 
 #[derive(Default, Debug, PartialEq)]
 pub struct Appearance {
-	pub name: String,
-	
 	pub skin: u8,
 	pub hair: u8,
 	pub hair_dye: u8,
@@ -148,43 +146,6 @@ pub struct Appearance {
 	
 	pub unknown_trait: u8,
 	pub unknown_trait2: u8,
-}
-impl Appearance {
-	pub fn read(reader: &mut impl io::BufRead) -> Result<Appearance, crate::packet::PacketError> {
-		let mut appearance = Appearance::default();
-		appearance.skin = reader.read_u8()?;
-		appearance.hair = reader.read_u8()?;
-		
-		appearance.name = reader.read_varstring()?;
-		if appearance.name.is_empty() { return Err(crate::packet::PacketError::InvalidField) }
-		
-		appearance.hair_dye = reader.read_u8()?;
-		appearance.hide_visuals_1 = reader.read_u8()?;
-		appearance.hide_visuals_2 = reader.read_u8()?;
-		appearance.hide_misc = reader.read_u8()?;
-		appearance.hair_color = Color::read(reader)?;
-		appearance.skin_color = Color::read(reader)?;
-		appearance.eye_color = Color::read(reader)?;
-		appearance.shirt_color = Color::read(reader)?;
-		appearance.under_shift_color = Color::read(reader)?;
-		appearance.pants_color = Color::read(reader)?;
-		appearance.shoe_color = Color::read(reader)?;
-		
-		//appearance.unknown_color = Color::read(reader)?;
-		appearance.unknown_trait = reader.read_u8()?;
-		appearance.unknown_trait2 = reader.read_u8()?;
-		
-		Ok(appearance)
-	}
-	pub fn init(&mut self, other: Appearance) -> Result<(), PlayerError> { 
-		if !self.name.is_empty() {
-			Err(PlayerError::WrongField("Can't Modify Player Appearance"))
-		} else {
-			*self = other;
-			println!("{:?}", self);
-			Ok(())
-		}
-	}
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -230,6 +191,7 @@ impl Status {
 pub struct Player {
 	pub id: u8,
 	pub uuid: String, // uuid of the player TODO: what is this used for?
+	pub name: String,
 	pub position: TileCoord,
 	
 	pub status: Status, // Holds hp, mana, buffs etc.
@@ -238,4 +200,32 @@ pub struct Player {
 
 	pub difficulty: Difficulty,
 	pub torch_state: TorchState,
+}
+impl Player {
+	pub fn read_playerinfo(reader: &mut impl io::BufRead) -> Result<(String, Appearance), crate::packet::PacketError> {
+		let mut appearance = Appearance::default();
+		appearance.skin = reader.read_u8()?;
+		appearance.hair = reader.read_u8()?;
+		
+		let name = reader.read_varstring()?;
+		if name.is_empty() { return Err(crate::packet::PacketError::InvalidField) }
+		
+		appearance.hair_dye = reader.read_u8()?;
+		appearance.hide_visuals_1 = reader.read_u8()?;
+		appearance.hide_visuals_2 = reader.read_u8()?;
+		appearance.hide_misc = reader.read_u8()?;
+		appearance.hair_color = Color::read(reader)?;
+		appearance.skin_color = Color::read(reader)?;
+		appearance.eye_color = Color::read(reader)?;
+		appearance.shirt_color = Color::read(reader)?;
+		appearance.under_shift_color = Color::read(reader)?;
+		appearance.pants_color = Color::read(reader)?;
+		appearance.shoe_color = Color::read(reader)?;
+		
+		//appearance.unknown_color = Color::read(reader)?;
+		appearance.unknown_trait = reader.read_u8()?;
+		appearance.unknown_trait2 = reader.read_u8()?;
+		
+		Ok((name, appearance))
+	}
 }

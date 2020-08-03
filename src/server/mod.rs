@@ -6,8 +6,7 @@ use std::{
 	error::Error,
 	sync::Arc,
 	collections::HashMap,
-}
-use arc_swap::ArcSwap;
+};
 
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, RwLock, Mutex};
@@ -54,14 +53,18 @@ impl Server {
 			use ServerAction::*;
 			use std::convert::TryInto;
 			match action {
-				ConnectClient(name, chan) => {
-					let id = self.names.len()
-					chan.send(ClientAction::SetID(id)).await?;
+				ConnectClient(name, mut chan) => {
+					let id = self.names.len();
+					chan.send(ClientAction::SetClientID(id)).await?;
 					self.names.insert(name, id);
-					self.clients.insert(name, chan);
+					self.clients.insert(id, chan);
 				},
 				DisconnectClient(name) => {
-					self.clients.remove(name);
+					if let Some(id) = self.names.remove(&name) {
+						self.clients.remove(&id);
+					} else {
+						error!("Client {:?} allready left, but Disconnect ServerAction was called again", name);
+					}
 				},
 				Chat(s) => info!("Received Chat {}", s),
 				_ => warn!("Unimplemented Action")
@@ -103,14 +106,9 @@ impl Server {
 		loop {
 			let (socket, _) = listener.accept().await?; // Wait for new connection (or return Err)
 			
-			let mut sa_tx_copy = server_action.clone();
-			let mut wld_tx_copy = world_action.clone();
+			//let mut wld_tx_copy = world_action.clone();
 			
 			let (mut client, mut action_receiver) = Client::new();
-			/*if let Err(err) = sa_tx_copy.send(ServerAction::ConnectClient(client.action.clone())).await {
-				error!("Server Closed: {:?}", err.to_string());
-				break;
-			}*/
 			
 			//wld_tx_copy.send(WorldAction::SpawnClient(client.action.clone(), None));
 			
@@ -126,15 +124,17 @@ impl Server {
 				} else { error!("All Senders dropped for client"); continue; }
 			};
 			
+			let server_action = server_action.clone();
+			let world_action = world_action.clone();
 			tokio::spawn(async move {
 				info!(target: "client_thread", "New Client Connected {:?}", socket);
-				let result = client.handle(socket, action_receiver, sa_tx_copy, wld_tx_copy, chunk_action).await;
+				let result = client.handle(socket, action_receiver, server_action, world_action, chunk_action).await;
 				match result {
 					Err(error) => warn!("Client Error: {}", error),
 					Ok(_) => info!("Client Disconnected"),
 				}
 			});
 		}
-		Ok(())
+		//Ok(())
 	}
 }
