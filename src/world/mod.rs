@@ -177,6 +177,7 @@ impl World {
 	pub async fn handle(&mut self, mut action_receiver: mpsc::Receiver<WorldAction>) -> Result<(), Box<dyn Error>> {
 		let mut chunks: HashMap<ChunkCoord, Option<LoadedChunk>> = HashMap::new();
 		
+		if self.chunk_size == 0 { self.chunk_size = 16; }
 		let spawn_chunk_coord = ChunkCoord::from_tilecoord(&self.spawn_coord, self.chunk_size);
 		chunks.insert(spawn_chunk_coord, Some(LoadedChunk::from_chunk(
 			Chunk::test_chunk(self.chunk_size)

@@ -6,6 +6,7 @@ use std::{
 	error::Error,
 	collections::hash_map::DefaultHasher,
 };
+use rand::random;
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use variant_encoding::VarStringReader;
@@ -189,10 +190,21 @@ pub fn read(reader: &mut impl Read) -> Result<World, Box<dyn Error>> {
 	world.weather.rain_time = reader.read_i32::<LittleEndian>()? as u32;
 	world.weather.rain_amount = reader.read_f32::<LittleEndian>()?;
 	
-	world.gen_data.cobalt_tier = CobaltTier::try_from(reader.read_i32::<LittleEndian>()? as u16)?;
-	world.gen_data.mythril_tier = MythrilTier::try_from(reader.read_i32::<LittleEndian>()? as u16)?;
-	world.gen_data.adamantite_tier = AdamantiteTier::try_from(reader.read_i32::<LittleEndian>()? as u16)?;
-
+	world.gen_data.cobalt_tier = match reader.read_i32::<LittleEndian>()? {
+		107 => CobaltTier::CobaltOre,
+		221 => CobaltTier::PalladiumOre,
+		_ => random(), // Can sometimes be -1 if not in hardmode yet
+	};
+	world.gen_data.mythril_tier = match reader.read_i32::<LittleEndian>()? {
+		108 => MythrilTier::MythilOre,
+		222 => MythrilTier::OrichalcumOre,
+		_ => random(), // Can sometimes be -1 if not in hardmode yet
+	};
+	world.gen_data.adamantite_tier = match reader.read_i32::<LittleEndian>()? {
+		111 => AdamantiteTier::AdamantiteOre,
+		223 => AdamantiteTier::TitaniumOre,
+		_ => random(), // Can sometimes be -1 if not in hardmode yet
+	};
 	world.style.forest_bg[0] = reader.read_u8()?;
 	world.style.corruption_bg = reader.read_u8()?;
 	world.style.jungle_bg = reader.read_u8()?;

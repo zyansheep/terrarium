@@ -106,14 +106,14 @@ pub mod ore_tiers {
 	#[derive(Debug, Deserialize, Serialize, TryFromPrimitive, EnumRand, Clone, Copy)]
 	#[repr(u16)]
 	pub enum MythrilTier {
-		MythilTier = 108,
+		MythilOre = 108,
 		OrichalcumOre = 222,
 	}
 	#[derive(Debug, Deserialize, Serialize, TryFromPrimitive, EnumRand, Clone, Copy)]
 	#[repr(u16)]
 	pub enum AdamantiteTier {
-		AdamantiteTier = 111,
-		TitaniumTier = 223,
+		AdamantiteOre = 111,
+		TitaniumOre = 223,
 	}
 }
 pub use ore_tiers::*;
@@ -140,7 +140,7 @@ impl Default for GenerationData {
 			corruption_type: CorruptionType::Corruption,
 			surface_y: 0, rock_layer_y: 0,
 			copper_tier: CopperTier::CopperOre, iron_tier: IronTier::IronOre, silver_tier: SilverTier::SilverOre, gold_tier: GoldTier::GoldOre,
-			cobalt_tier: CobaltTier::CobaltOre, mythril_tier: MythrilTier::MythilTier, adamantite_tier: AdamantiteTier::AdamantiteTier,
+			cobalt_tier: CobaltTier::CobaltOre, mythril_tier: MythrilTier::MythilOre, adamantite_tier: AdamantiteTier::AdamantiteOre,
 		}
 	}
 }
